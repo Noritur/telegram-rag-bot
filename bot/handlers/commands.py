@@ -3,6 +3,8 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
+from bot.rag.store import murmure
+
 log = logging.getLogger(__name__)
 
 GREETINGS = {
@@ -83,3 +85,86 @@ async def switch_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context.user_data["lang"] = lang
     log.info("lang switch: user_id=%s → %s", query.from_user.id, lang)
     await query.edit_message_text(GREETINGS[lang], reply_markup=LANG_BUTTONS)
+
+
+CATALOG_INTRO = {
+    "uk": "Наш асортимент:",
+    "ru": "Наш ассортимент:",
+    "en": "Our collection:",
+}
+
+CATEGORY_LABELS = {
+    "uk": {
+        "кольє": "Кольє",
+        "браслети": "Браслети",
+        "сережки": "Сережки",
+        "перстні": "Перстні",
+        "кулони": "Кулони",
+    },
+    "ru": {
+        "кольє": "Колье",
+        "браслети": "Браслеты",
+        "сережки": "Серьги",
+        "перстні": "Кольца",
+        "кулони": "Кулоны",
+    },
+    "en": {
+        "кольє": "Necklaces",
+        "браслети": "Bracelets",
+        "сережки": "Earrings",
+        "перстні": "Rings",
+        "кулони": "Pendants",
+    },
+}
+
+CATALOG_FOOTER = {
+    "uk": "Напишіть, що цікавить — допоможу обрати.",
+    "ru": "Напишите, что интересует — помогу подобрать.",
+    "en": "Tell me what catches your eye and I'll help you pick.",
+}
+
+CATALOG_EMPTY = {
+    "uk": "Каталог тимчасово порожній. Спробуйте пізніше.",
+    "ru": "Каталог временно пуст. Попробуйте позже.",
+    "en": "The catalog is temporarily empty. Please check back later.",
+}
+
+
+CATEGORY_ORDER = ["кольє", "браслети", "сережки", "перстні", "кулони"]
+
+
+async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    lang = resolve_lang(context, user.language_code if user else None)
+
+    rows = (
+        murmure()
+        .table("products")
+        .select("category,in_stock")
+        .eq("in_stock", True)
+        .execute()
+        .data
+    )
+
+    if not rows:
+        await update.message.reply_text(CATALOG_EMPTY[lang])
+        return
+
+    counts: dict[str, int] = {}
+    for r in rows:
+        cat = r.get("category")
+        if not cat:
+            continue
+        counts[cat] = counts.get(cat, 0) + 1
+
+    labels = CATEGORY_LABELS[lang]
+    lines = [CATALOG_INTRO[lang], ""]
+    for cat in CATEGORY_ORDER:
+        n = counts.get(cat, 0)
+        if n == 0:
+            continue
+        lines.append(f"• {labels.get(cat, cat)}: {n}")
+    lines.append("")
+    lines.append(CATALOG_FOOTER[lang])
+
+    await update.message.reply_text("\n".join(lines))
