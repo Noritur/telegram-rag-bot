@@ -87,6 +87,37 @@ async def switch_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await query.edit_message_text(GREETINGS[lang], reply_markup=LANG_BUTTONS)
 
 
+HELP = {
+    "uk": (
+        "Опишіть, що шукаєте — камінь, колір, бюджет, привід. "
+        "Я підберу серед своїх 15 виробів.\n\n"
+        "/catalog — категорії з кількістю\n"
+        "Кнопки нижче — перемикання мови.\n\n"
+        "Складні питання передаю власниці."
+    ),
+    "ru": (
+        "Опишите, что ищете — камень, цвет, бюджет, повод. "
+        "Подберу из своих 15 изделий.\n\n"
+        "/catalog — категории с количеством\n"
+        "Кнопки ниже — переключение языка.\n\n"
+        "Сложные вопросы передаю владелице."
+    ),
+    "en": (
+        "Tell me what you're after — stone, color, budget, occasion. "
+        "I'll match from my 15 pieces.\n\n"
+        "/catalog — categories with counts\n"
+        "Buttons below — switch language.\n\n"
+        "Complex questions go to the owner."
+    ),
+}
+
+
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    lang = resolve_lang(context, user.language_code if user else None)
+    await update.message.reply_text(HELP[lang], reply_markup=LANG_BUTTONS)
+
+
 CATALOG_INTRO = {
     "uk": "Наш асортимент:",
     "ru": "Наш ассортимент:",

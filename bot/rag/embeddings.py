@@ -15,6 +15,10 @@ def _get_client() -> genai.Client:
     return _client
 
 
+def get_genai_client() -> genai.Client:
+    return _get_client()
+
+
 def _embed_config() -> types.EmbedContentConfig:
     return types.EmbedContentConfig(output_dimensionality=GEMINI_EMBEDDING_DIM)
 
