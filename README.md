@@ -2,7 +2,7 @@
 
 A production RAG chatbot for small Telegram-based jewelry shops. Customers ask in Ukrainian, Russian, or English; the bot answers from the live catalog and hands off to the owner when it doesn't know.
 
-Built end-to-end in **5 days** as a portfolio piece + sellable product for SMB shop owners. Stack: Vercel Functions (Python) + Supabase pgvector + Gemini.
+Portfolio piece + sellable product for SMB shop owners. Stack: Vercel Functions (Python) + Supabase pgvector + Gemini.
 
 > Live demo: see [For Telegram-shop owners](#for-telegram-shop-owners-ruua) below for a contact link.
 
@@ -205,8 +205,7 @@ Bot quality is bound by content depth. Flat product descriptions force the LLM t
 
 ## Project status & honest notes
 
-- Built 2026-05-06 → 2026-05-12. Real time spent: ~5 hours active vibe-coding.
-- This is a **portfolio implementation** with a mock catalog of 15 stone-jewelry items. For a real shop, you replace `bot/data/catalog.json` and re-run `seed_supabase.py`.
+- This is a **portfolio implementation** with a mock catalog of 15 stone-jewelry items. For a real shop, replace `bot/data/catalog.json` and re-run `seed_supabase.py`.
 - The mock shop "Murmure" doesn't sell anything — DMs to the bot are stored in `murmure.messages` for analysis only.
 - Security boundary: the only thing protecting `/api/index` from the open internet is the `secret_token` header. Don't commit `WEBHOOK_SECRET` or any of the Supabase / Gemini / Telegram tokens.
 
