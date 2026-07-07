@@ -25,8 +25,10 @@ A grounded RAG agent that:
 1. Reads the shop's product catalog from Supabase (pgvector for semantic search)
 2. Detects the customer's language (UA / RU / EN) and replies in the same one
 3. Uses **only** items present in the catalog (no hallucinated products)
-4. Hands off to the owner when no good match exists, and logs the missed question for the owner to review later
-5. Gives the owner `/stats` and `/missed` admin commands so they can iterate on catalog content
+4. **Captures orders** — an "I want to order" button under every product answer; one tap saves an order lead and pings the owner in Telegram instantly
+5. Routes generic browse questions ("what do you have?") straight to the catalog summary instead of semantic search
+6. Hands off to the owner when no good match exists — the owner gets the question forwarded in real time, and it's logged for catalog iteration
+7. Gives the owner `/stats` and `/missed` admin commands so they can iterate on catalog content
 
 ## Architecture
 

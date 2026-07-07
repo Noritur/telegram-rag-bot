@@ -35,6 +35,7 @@ from bot.config import TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET
 from bot.handlers.admin import missed, stats
 from bot.handlers.chat import chat
 from bot.handlers.commands import catalog, help_cmd, start, switch_lang
+from bot.handlers.order import nav_catalog, order_callback
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,6 +56,8 @@ def _build_app() -> Application:
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("missed", missed))
     app.add_handler(CallbackQueryHandler(switch_lang, pattern=r"^lang:"))
+    app.add_handler(CallbackQueryHandler(order_callback, pattern=r"^order:"))
+    app.add_handler(CallbackQueryHandler(nav_catalog, pattern=r"^nav:catalog$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
     return app
 

@@ -8,6 +8,8 @@ from bot.config import RELEVANCE_THRESHOLD
 from bot.data.prompts import HANDOFF, LLM_ERROR
 from bot.handlers.browse import is_browse_query
 from bot.handlers.commands import catalog, resolve_lang
+from bot.handlers.notify import format_client, notify_owner
+from bot.handlers.order import reply_cta_markup
 from bot.rag.llm import generate_reply
 from bot.rag.retriever import search
 from bot.storage.logger import safe_log_message, safe_log_missed
@@ -51,6 +53,13 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         asyncio.create_task(asyncio.to_thread(safe_log_missed, user_id, text))
         log.info("handoff: query=%r top_sim=%s", text, top_sim)
         await update.message.reply_text(HANDOFF[lang])
+        # The handoff promise must be real: ping the owner right away.
+        await notify_owner(
+            context.bot,
+            "Питання без відповіді:\n"
+            f"“{text}”\n"
+            f"Від: {format_client(user)} — можна відповісти напряму.",
+        )
         return
 
     try:
@@ -68,4 +77,6 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     log.info(
         "rag: query=%r matched=%d top_sim=%.3f", text, len(products), top_sim
     )
-    await update.message.reply_text(reply)
+    await update.message.reply_text(
+        reply, reply_markup=reply_cta_markup(lang, products[0]["id"])
+    )

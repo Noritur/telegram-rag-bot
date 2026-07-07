@@ -164,10 +164,9 @@ CATALOG_EMPTY = {
 CATEGORY_ORDER = ["кольє", "браслети", "сережки", "перстні", "кулони"]
 
 
-async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    lang = resolve_lang(context, user.language_code if user else None)
-
+def catalog_text(lang: str) -> str | None:
+    """Category summary for both the /catalog command and inline nav buttons.
+    Returns None when the catalog is empty."""
     rows = (
         murmure()
         .table("products")
@@ -178,8 +177,7 @@ async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
     if not rows:
-        await update.message.reply_text(CATALOG_EMPTY[lang])
-        return
+        return None
 
     counts: dict[str, int] = {}
     for r in rows:
@@ -197,5 +195,11 @@ async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         lines.append(f"• {labels.get(cat, cat)}: {n}")
     lines.append("")
     lines.append(CATALOG_FOOTER[lang])
+    return "\n".join(lines)
 
-    await update.message.reply_text("\n".join(lines))
+
+async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    lang = resolve_lang(context, user.language_code if user else None)
+    text = catalog_text(lang)
+    await update.message.reply_text(text if text else CATALOG_EMPTY[lang])
