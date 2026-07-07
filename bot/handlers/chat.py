@@ -6,7 +6,8 @@ from telegram.ext import ContextTypes
 
 from bot.config import RELEVANCE_THRESHOLD
 from bot.data.prompts import HANDOFF, LLM_ERROR
-from bot.handlers.commands import resolve_lang
+from bot.handlers.browse import is_browse_query
+from bot.handlers.commands import catalog, resolve_lang
 from bot.rag.llm import generate_reply
 from bot.rag.retriever import search
 from bot.storage.logger import safe_log_message, safe_log_missed
@@ -21,6 +22,15 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id if user else 0
     lang = resolve_lang(context, user.language_code if user else None)
+
+    # Generic "what do you have?" belongs to the catalog, not per-product RAG.
+    if is_browse_query(text):
+        log.info("browse intent shortcut: query=%r", text)
+        asyncio.create_task(
+            asyncio.to_thread(safe_log_message, user_id, text, True, None)
+        )
+        await catalog(update, context)
+        return
 
     try:
         products = await asyncio.to_thread(search, text)
