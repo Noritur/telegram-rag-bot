@@ -71,13 +71,17 @@ def _fetch_product_name(product_id: str) -> str | None:
 
 
 def _insert_order(user_id: int, username: str | None, product_id: str, product_name: str) -> None:
+    # returning="minimal": orders are write-only for the bot role — RLS has an
+    # INSERT policy but deliberately no SELECT, so return=representation would
+    # reject the whole insert.
     murmure().table("orders").insert(
         {
             "user_id": user_id,
             "username": username,
             "product_id": product_id,
             "product_name": product_name,
-        }
+        },
+        returning="minimal",
     ).execute()
 
 
