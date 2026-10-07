@@ -1,7 +1,7 @@
-"""Pure-regex test for browse-intent detection — no telegram deps needed.
+"""Browse-intent detection: generic "what do you have?" goes to the catalog,
+anything specific stays on the RAG path. Pure regex, no fakes needed."""
 
-Run: python3 -m tests.test_browse_intent
-"""
+import pytest
 
 from bot.handlers.browse import is_browse_query
 
@@ -33,13 +33,11 @@ NOT_BROWSE = [
 ]
 
 
-def main() -> None:
-    for q in BROWSE:
-        assert is_browse_query(q), f"should be browse: {q!r}"
-    for q in NOT_BROWSE:
-        assert not is_browse_query(q), f"should NOT be browse: {q!r}"
-    print(f"browse intent: ok ({len(BROWSE)} positive, {len(NOT_BROWSE)} negative)")
+@pytest.mark.parametrize("query", BROWSE)
+def test_generic_question_is_browse(query):
+    assert is_browse_query(query)
 
 
-if __name__ == "__main__":
-    main()
+@pytest.mark.parametrize("query", NOT_BROWSE)
+def test_specific_question_stays_on_rag(query):
+    assert not is_browse_query(query)

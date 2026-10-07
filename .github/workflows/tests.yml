@@ -1,0 +1,22 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      # Python version comes from .python-version, same as the Vercel runtime.
+      - run: uv venv
+      - run: uv pip install -r requirements-dev.txt
+      # No secrets needed: every external service is faked in tests/conftest.py.
+      - run: .venv/bin/python -m pytest -q
