@@ -1,5 +1,7 @@
+import json
 import logging
 import time
+from typing import NamedTuple
 
 from google.genai import errors, types
 
@@ -22,23 +24,67 @@ OVERLOADED = 503
 RATE_LIMITED = 429
 
 
-def _call(model: str, query: str, system: str) -> str:
+# The order button under an answer must point at the product the answer
+# recommends - not simply the top retrieval hit, which can be a different item.
+# So the model returns JSON and names its choice; the enum holds only the
+# retrieved ids, so it cannot invent one.
+NO_PRODUCT = "none"
+
+
+class Reply(NamedTuple):
+    text: str
+    product_id: str | None  # retrieved product the reply recommends, if any
+
+
+def reply_schema(product_ids: list[str]) -> types.Schema:
+    return types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "reply": types.Schema(type=types.Type.STRING),
+            "product_id": types.Schema(
+                type=types.Type.STRING, enum=[*product_ids, NO_PRODUCT]
+            ),
+        },
+        required=["reply", "product_id"],
+        property_ordering=["reply", "product_id"],
+    )
+
+
+def parse_reply(raw: str, product_ids: list[str]) -> Reply:
+    """Never guesses a product: anything unexpected means no order button."""
+    try:
+        data = json.loads(raw)
+        text = str(data.get("reply") or "").strip()
+        product_id = data.get("product_id")
+    except (ValueError, AttributeError):
+        log.warning("LLM reply is not the expected JSON — answering without an order button")
+        return Reply(raw.strip(), None)
+    return Reply(text, product_id if product_id in product_ids else None)
+
+
+def _call(model: str, query: str, system: str, schema: types.Schema) -> str:
     result = get_genai_client().models.generate_content(
         model=model,
         contents=query,
-        config=types.GenerateContentConfig(system_instruction=system),
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            response_mime_type="application/json",
+            response_schema=schema,
+        ),
     )
     return result.text or ""
 
 
-def generate_reply(query: str, products: list[dict], lang: str) -> str:
+def generate_reply(query: str, products: list[dict], lang: str) -> Reply:
     system = build_system_prompt(lang, products)
+    product_ids = [p["id"] for p in products]
+    schema = reply_schema(product_ids)
     last_error: Exception | None = None
 
     for model in MODEL_FALLBACK:
         for attempt in range(MAX_RETRIES_PER_MODEL):
             try:
-                return _call(model, query, system)
+                return parse_reply(_call(model, query, system, schema), product_ids)
             # google-genai raises ClientError for 4xx (429 included) and
             # ServerError for 5xx: catch their common base and decide by code.
             except errors.APIError as e:
@@ -60,4 +106,4 @@ def generate_reply(query: str, products: list[dict], lang: str) -> str:
 
     if last_error:
         raise last_error
-    return ""
+    return Reply("", None)

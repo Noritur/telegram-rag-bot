@@ -5,7 +5,7 @@ from google.genai import errors
 
 from bot.data.prompts import HANDOFF, LLM_ERROR
 from bot.handlers.commands import CATALOG_INTRO
-from tests.conftest import ADMIN_ID, CLIENT_ID, PRODUCT
+from tests.conftest import ADMIN_ID, CLIENT_ID, DEFAULT_REPLY, PRODUCT
 
 
 def matches(similarity: float, **overrides) -> list[dict]:
@@ -29,8 +29,9 @@ async def test_relevant_question_gets_grounded_answer_with_order_button(bot, db,
 
     await bot.send(bot.text("хочу браслет з аметисту"))
 
-    assert bot.texts_to(CLIENT_ID) == [genai.reply]
+    assert bot.texts_to(CLIENT_ID) == [DEFAULT_REPLY]
     assert bot.buttons_to(CLIENT_ID) == ["order:amethyst-bracelet", "nav:catalog"]
+    assert bot.button_labels_to(CLIENT_ID) == ["Хочу замовити: Браслет з аметисту", "Каталог"]
     [call] = genai.generate_calls
     assert call["query"] == "хочу браслет з аметисту"
     assert "Браслет з аметисту" in call["system"]
@@ -55,7 +56,7 @@ async def test_relevance_threshold_boundary(bot, db, genai, similarity, answered
 
     await bot.send(bot.text("щось про аметист"))
 
-    assert (bot.texts_to(CLIENT_ID) == [genai.reply]) is answered
+    assert (bot.texts_to(CLIENT_ID) == [DEFAULT_REPLY]) is answered
     assert (bot.texts_to(CLIENT_ID) == [HANDOFF["uk"]]) is not answered
 
 
@@ -71,6 +72,45 @@ async def test_unknown_question_hands_off_and_pings_owner(bot, db, genai):
     assert genai.generate_calls == []
     assert [m.row["text"] for m in db.inserted("missed")] == ["чи робите гравіювання?"]
     assert db.inserted("messages")[0].row["matched"] is False
+
+
+async def test_order_button_follows_the_recommendation_not_the_top_hit(bot, db, genai):
+    # Live case, 2026-10-08: "браслет з аметисту" ranked a tiger-eye bracelet
+    # above the amethyst necklace; the answer recommended the necklace, but the
+    # button used to order the bracelet.
+    db.rpc_results["match_products"] = [
+        {**PRODUCT, "id": "brace-tiger-eye-006", "name": "Браслет 'Тигрове Око'", "similarity": 0.420},
+        {**PRODUCT, "id": "neck-amethyst-001", "name": "Кольє 'Лавандова Ніч' з аметисту", "similarity": 0.413},
+    ]
+    genai.reply = {
+        "reply": "Браслета з аметисту зараз нема, але є кольє 'Лавандова Ніч' з аметисту.",
+        "product_id": "neck-amethyst-001",
+    }
+
+    await bot.send(bot.text("браслет з аметисту"))
+
+    assert bot.buttons_to(CLIENT_ID) == ["order:neck-amethyst-001", "nav:catalog"]
+    assert bot.button_labels_to(CLIENT_ID)[0] == "Хочу замовити: Лавандова Ніч"
+
+
+async def test_answer_recommending_nothing_has_no_order_button(bot, db, genai):
+    db.rpc_results["match_products"] = matches(0.6)
+    genai.reply = {"reply": "Такого в нас нема, передам питання власниці.", "product_id": "none"}
+
+    await bot.send(bot.text("а є щось для чоловіків?"))
+
+    assert bot.texts_to(CLIENT_ID) == ["Такого в нас нема, передам питання власниці."]
+    assert bot.buttons_to(CLIENT_ID) == ["nav:catalog"]
+
+
+async def test_reply_that_is_not_json_is_shown_without_an_order_button(bot, db, genai):
+    db.rpc_results["match_products"] = matches(0.8)
+    genai.reply = "Аметистовий браслет — гарний вибір."
+
+    await bot.send(bot.text("браслет з аметисту"))
+
+    assert bot.texts_to(CLIENT_ID) == ["Аметистовий браслет — гарний вибір."]
+    assert bot.buttons_to(CLIENT_ID) == ["nav:catalog"]
 
 
 async def test_out_of_stock_match_is_not_offered(bot, db, genai):
@@ -120,7 +160,7 @@ async def test_rate_limit_on_main_model_is_invisible_to_the_client(bot, db, gena
     genai.reply = lambda model, query: (
         errors.ClientError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED"}})
         if model == "gemini-2.5-flash"
-        else "Відповідь від резервної моделі."
+        else {"reply": "Відповідь від резервної моделі.", "product_id": "amethyst-bracelet"}
     )
 
     await bot.send(bot.text("браслет з аметисту"))

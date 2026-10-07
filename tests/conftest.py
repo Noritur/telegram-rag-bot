@@ -55,6 +55,7 @@ BOT_USER = {
     "supports_inline_queries": False,
 }
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", None}
+DEFAULT_REPLY = "Аметистовий браслет — спокій і ясність, 1200 грн."
 
 
 # --- network guard -----------------------------------------------------------
@@ -194,13 +195,13 @@ def db(monkeypatch):
 class FakeGenai:
     """Stands in for google.genai.Client: .models.embed_content / generate_content.
 
-    `reply` decides what generate_content does: a string is returned as the
-    model text, an exception is raised, a callable gets (model, query) and may
-    do either.
+    `reply` decides what generate_content does: a dict is sent back as JSON (what
+    the structured-output config asks for), a string is returned as raw model
+    text, an exception is raised, a callable gets (model, query) and may do any.
     """
 
     def __init__(self):
-        self.reply = "Аметистовий браслет — спокій і ясність, 1200 грн."
+        self.reply = {"reply": DEFAULT_REPLY, "product_id": "amethyst-bracelet"}
         self.generate_calls: list[dict] = []
         self.embed_calls: list[object] = []
         self.models = self
@@ -211,11 +212,20 @@ class FakeGenai:
         return SimpleNamespace(embeddings=[SimpleNamespace(values=[0.1, 0.2, 0.3])] * n)
 
     def generate_content(self, model, contents, config=None):
-        system = getattr(config, "system_instruction", None)
-        self.generate_calls.append({"model": model, "query": contents, "system": system})
+        self.generate_calls.append(
+            {
+                "model": model,
+                "query": contents,
+                "system": getattr(config, "system_instruction", None),
+                "mime_type": getattr(config, "response_mime_type", None),
+                "schema": getattr(config, "response_schema", None),
+            }
+        )
         outcome = self.reply(model, contents) if callable(self.reply) else self.reply
         if isinstance(outcome, Exception):
             raise outcome
+        if isinstance(outcome, dict):
+            outcome = json.dumps(outcome, ensure_ascii=False)
         return SimpleNamespace(text=outcome)
 
 
@@ -293,6 +303,12 @@ class BotHarness:
 
     def buttons_to(self, chat_id: int) -> list[str]:
         """callback_data of every inline button sent to chat_id, in order."""
+        return [b.get("callback_data") for b in self._buttons(chat_id)]
+
+    def button_labels_to(self, chat_id: int) -> list[str]:
+        return [b.get("text") for b in self._buttons(chat_id)]
+
+    def _buttons(self, chat_id: int) -> list[dict]:
         out = []
         for p in self.calls("sendMessage"):
             if p.get("chat_id") != chat_id or "reply_markup" not in p:
@@ -300,7 +316,7 @@ class BotHarness:
             markup = p["reply_markup"]
             markup = json.loads(markup) if isinstance(markup, str) else markup
             for row in markup.get("inline_keyboard", []):
-                out.extend(b.get("callback_data") for b in row)
+                out.extend(row)
         return out
 
     # update builders

@@ -7,6 +7,7 @@ orders from the same message.
 
 import asyncio
 import logging
+import re
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
@@ -48,13 +49,24 @@ CATALOG_EMPTY_NAV = {
 }
 
 
-def reply_cta_markup(lang: str, product_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton(ORDER_BTN[lang], callback_data=f"order:{product_id}")],
-            [InlineKeyboardButton(CATALOG_BTN[lang], callback_data="nav:catalog")],
-        ]
-    )
+_QUOTED_TITLE = re.compile(r"['\"«]([^'\"»]+)['\"»]")
+
+
+def short_title(name: str) -> str:
+    """'Кольє 'Лавандова Ніч' з аметисту' -> 'Лавандова Ніч'; no quotes -> name."""
+    m = _QUOTED_TITLE.search(name)
+    return m.group(1) if m else name
+
+
+def reply_cta_markup(lang: str, product: dict | None) -> InlineKeyboardMarkup:
+    """The order button names the product, so the client sees what they order.
+    No recommended product -> catalog button only."""
+    rows = []
+    if product:
+        label = f"{ORDER_BTN[lang]}: {short_title(product['name'])}"
+        rows.append([InlineKeyboardButton(label, callback_data=f"order:{product['id']}")])
+    rows.append([InlineKeyboardButton(CATALOG_BTN[lang], callback_data="nav:catalog")])
+    return InlineKeyboardMarkup(rows)
 
 
 def _fetch_product_name(product_id: str) -> str | None:

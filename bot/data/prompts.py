@@ -21,7 +21,7 @@ def _format_product(p: dict) -> str:
     head = ", ".join(part for part in head_parts if part)
     name = p.get("name", "")
     desc = p.get("description", "")
-    return f"- {name} | {head}\n  {desc}"
+    return f"- [{p.get('id', '')}] {name} | {head}\n  {desc}"
 
 
 def build_system_prompt(lang: str, products: list[dict]) -> str:
@@ -39,6 +39,11 @@ def build_system_prompt(lang: str, products: list[dict]) -> str:
         "Tone: warm, elegant, knowledgeable but not pushy. Concise — 2-4 sentences.\n"
         "If none of the catalog items genuinely match the user's question, "
         "say briefly that you'll connect them to the owner (in the same language).\n"
+        "Answer as JSON: `reply` is your message to the user; `product_id` is the "
+        "[id] of the one catalog item your reply recommends — the order button under "
+        "your reply orders exactly that item. When you suggest an alternative to what "
+        "was asked, name it in the reply and put its [id] in product_id. Use \"none\" "
+        "only when the reply recommends no item at all.\n"
         "\nCATALOG:\n"
         f"{catalog_block}"
     )

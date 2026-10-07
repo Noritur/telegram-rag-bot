@@ -3,7 +3,15 @@
 import json
 from pathlib import Path
 
-from bot.handlers.order import CATALOG_EMPTY_NAV, ORDER_CONFIRM, ORDER_ERROR
+import pytest
+
+from bot.handlers.order import (
+    CATALOG_EMPTY_NAV,
+    ORDER_CONFIRM,
+    ORDER_ERROR,
+    reply_cta_markup,
+    short_title,
+)
 from tests.conftest import ADMIN_ID, CLIENT_ID, PRODUCT
 
 CATALOG = json.loads((Path(__file__).parent.parent / "bot" / "data" / "catalog.json").read_text())
@@ -86,3 +94,29 @@ def test_every_product_id_fits_telegram_callback_limit():
     # Telegram rejects callback_data over 64 bytes, and with it the whole answer.
     too_long = [p["id"] for p in CATALOG if len(f"order:{p['id']}".encode()) > 64]
     assert too_long == []
+
+
+@pytest.mark.parametrize(
+    ("name", "title"),
+    [
+        ("Кольє 'Лавандова Ніч' з аметисту", "Лавандова Ніч"),
+        ("Браслет 'Тигрове Око'", "Тигрове Око"),
+        ("Кольє «Місячна Дорога»", "Місячна Дорога"),
+        ("Браслет з аметисту", "Браслет з аметисту"),
+    ],
+)
+def test_order_button_label_uses_the_quoted_title(name, title):
+    assert short_title(name) == title
+
+
+def test_every_catalog_product_gets_a_short_named_button():
+    for p in CATALOG:
+        [order_btn], _ = reply_cta_markup("uk", p).inline_keyboard
+        assert order_btn.callback_data == f"order:{p['id']}"
+        assert order_btn.text.startswith("Хочу замовити: ")
+        assert "'" not in order_btn.text and len(order_btn.text) <= 40, order_btn.text
+
+
+def test_no_product_means_catalog_button_only():
+    [[only]] = reply_cta_markup("en", None).inline_keyboard
+    assert only.callback_data == "nav:catalog"
