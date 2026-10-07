@@ -131,12 +131,11 @@ What is covered:
 - **webhook gate** — secret header required, fails closed when `WEBHOOK_SECRET` is unset, GET reveals nothing, one full HTTP → reply run
 - **chat** — browse shortcut, relevance threshold boundary, handoff with owner ping, out-of-stock filtering, LLM failure paths, client language
 - **orders** — lead saved with `returning="minimal"` (RLS regression guard), owner pinged even when the DB write fails, buttons cleared after a tap, every `callback_data` within Telegram's 64-byte limit
-- **RAG** — retrieval call shape, model fallback with backoff on 503, no retries on non-transient errors, prompt grounded in retrieved products only
+- **RAG** — retrieval call shape, model fallback (503: retry the same model with backoff; 429: switch to the next model at once, since each model has its own quota), no retries on non-transient errors, prompt grounded in retrieved products only
 - **admin and commands** — owner-only `/stats` and `/missed`, catalog summary, language detection
 
 Known bugs are pinned as strict `xfail` tests, so they turn red the day someone fixes them:
 
-- a Gemini `429` rate limit skips the fallback models (`ClientError` is not caught in `bot/rag/llm.py`)
 - the language picked with the buttons is forgotten on the next message in webhook mode (no persistence between invocations)
 
 Live retrieval against real Gemini and a seeded Supabase is opt-in: `RUN_LIVE=1 python -m pytest -m live`.

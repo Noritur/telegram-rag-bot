@@ -115,6 +115,20 @@ async def test_llm_trouble_apologises(bot, db, genai, outcome):
     assert bot.buttons_to(CLIENT_ID) == []
 
 
+async def test_rate_limit_on_main_model_is_invisible_to_the_client(bot, db, genai):
+    db.rpc_results["match_products"] = matches(0.8)
+    genai.reply = lambda model, query: (
+        errors.ClientError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED"}})
+        if model == "gemini-2.5-flash"
+        else "Відповідь від резервної моделі."
+    )
+
+    await bot.send(bot.text("браслет з аметисту"))
+
+    assert bot.texts_to(CLIENT_ID) == ["Відповідь від резервної моделі."]
+    assert bot.buttons_to(CLIENT_ID) == ["order:amethyst-bracelet", "nav:catalog"]
+
+
 async def test_russian_speaking_client_gets_russian(bot, db, genai):
     db.rpc_results["match_products"] = matches(0.1)
 

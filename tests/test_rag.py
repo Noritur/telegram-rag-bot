@@ -86,20 +86,42 @@ def test_bad_request_is_not_retried(genai, sleeps):
     assert models_called(genai) == [PRIMARY]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "known bug: google-genai raises ClientError for 4xx, llm.py catches only "
-        "ServerError, so the 429 branch is dead and a free-tier rate limit skips the "
-        "fallback models (which have their own quota) - the client sees LLM_ERROR"
-    ),
-)
-def test_rate_limited_primary_falls_back_to_lite(genai, sleeps):
+def test_rate_limited_primary_switches_model_without_waiting(genai, sleeps):
+    # google-genai raises 429 as ClientError (4xx). It used to slip past an
+    # `except ServerError` and skip the fallback models entirely.
     genai.reply = lambda model, query: (
         client_error(429, "RESOURCE_EXHAUSTED") if model == PRIMARY else "from lite"
     )
 
     assert llm.generate_reply("q", [PRODUCT], "uk") == "from lite"
+    # A spent quota does not come back in seconds: no retry, no sleep.
+    assert models_called(genai) == [PRIMARY, LITE]
+    assert sleeps == []
+
+
+def test_rate_limit_then_overload_follows_both_rules(genai, sleeps):
+    lite_calls = []
+
+    def reply(model, query):
+        if model == PRIMARY:
+            return client_error(429, "RESOURCE_EXHAUSTED")
+        lite_calls.append(model)
+        return server_error(503) if len(lite_calls) == 1 else "from lite, second try"
+
+    genai.reply = reply
+
+    assert llm.generate_reply("q", [PRODUCT], "uk") == "from lite, second try"
+    assert models_called(genai) == [PRIMARY, LITE, LITE]
+    assert sleeps == [1.5]
+
+
+def test_every_model_rate_limited_raises_after_one_call_each(genai, sleeps):
+    genai.reply = lambda model, query: client_error(429, "RESOURCE_EXHAUSTED")
+
+    with pytest.raises(errors.ClientError):
+        llm.generate_reply("q", [PRODUCT], "uk")
+    assert models_called(genai) == [PRIMARY, LITE, OLDER]
+    assert sleeps == []
 
 
 # --- prompt grounding --------------------------------------------------------
