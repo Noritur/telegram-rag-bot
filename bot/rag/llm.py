@@ -11,8 +11,9 @@ from bot.rag.embeddings import get_genai_client
 
 log = logging.getLogger(__name__)
 
-# Fallback chain — якщо primary 503 або 429, пробуємо легший lite, потім старший 2.0-flash.
-MODEL_FALLBACK = [GEMINI_LLM_MODEL, "gemini-2.5-flash-lite", "gemini-2.0-flash"]
+# Fallback chain — якщо primary 503 або 429, пробуємо легший lite, потім 3.8-flash
+# (інше покоління, окрема квота). gemini-2.0-flash Google вимкнув: 404 з 2026-10.
+MODEL_FALLBACK = [GEMINI_LLM_MODEL, "gemini-2.5-flash-lite", "gemini-3.8-flash"]
 MAX_RETRIES_PER_MODEL = 2
 BACKOFF_SECONDS = 1.5
 
