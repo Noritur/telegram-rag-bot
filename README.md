@@ -131,7 +131,8 @@ What is covered:
 - **webhook gate** — secret header required, fails closed when `WEBHOOK_SECRET` is unset, GET reveals nothing, one full HTTP → reply run
 - **chat** — browse shortcut, relevance threshold boundary, handoff with owner ping, out-of-stock filtering, LLM failure paths, client language
 - **orders** — lead saved with `returning="minimal"` (RLS regression guard), owner pinged even when the DB write fails, buttons cleared after a tap, every `callback_data` within Telegram's 64-byte limit
-- **RAG** — retrieval call shape, model fallback (503: retry the same model with backoff; 429: switch to the next model at once, since each model has its own quota), no retries on non-transient errors, prompt grounded in retrieved products only
+- **RAG** — retrieval call shape, model fallback (503: retry the same model with backoff; 429: switch to the next model at once, since each model has its own quota), no retries on non-transient errors, prompt grounded in retrieved products only, structured reply whose `product_id` enum holds only the retrieved ids, and a parser that never guesses a product
+- **order button** — orders the product the answer recommends (not the top retrieval hit), is labelled with its name, and disappears when the answer recommends nothing
 - **admin and commands** — owner-only `/stats` and `/missed`, catalog summary, language detection
 
 Known bugs are pinned as strict `xfail` tests, so they turn red the day someone fixes them:

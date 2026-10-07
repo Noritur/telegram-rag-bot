@@ -69,14 +69,17 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(LLM_ERROR[lang])
         return
 
-    if not reply.strip():
+    if not reply.text.strip():
         log.warning("empty LLM reply: query=%r", text)
         await update.message.reply_text(LLM_ERROR[lang])
         return
 
+    # The button orders what the answer recommends, not the top retrieval hit.
+    chosen = next((p for p in products if p["id"] == reply.product_id), None)
     log.info(
-        "rag: query=%r matched=%d top_sim=%.3f", text, len(products), top_sim
+        "rag: query=%r matched=%d top_sim=%.3f chosen=%s",
+        text, len(products), top_sim, reply.product_id,
     )
     await update.message.reply_text(
-        reply, reply_markup=reply_cta_markup(lang, products[0]["id"])
+        reply.text, reply_markup=reply_cta_markup(lang, chosen)
     )
