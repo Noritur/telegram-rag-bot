@@ -1,5 +1,7 @@
 # Murmure — multilingual Telegram support bot for natural-stone jewelry shops
 
+[![tests](https://github.com/Noritur/telegram-rag-bot/actions/workflows/tests.yml/badge.svg)](https://github.com/Noritur/telegram-rag-bot/actions/workflows/tests.yml)
+
 A production RAG chatbot for small Telegram-based jewelry shops. Customers ask in Ukrainian, Russian, or English; the bot answers from the live catalog and hands off to the owner when it doesn't know.
 
 Portfolio piece + sellable product for SMB shop owners. Stack: Vercel Functions (Python) + Supabase pgvector + Gemini.
@@ -114,6 +116,30 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
   -d "url=https://YOUR-PROJECT.vercel.app/api/index" \
   -d "secret_token=$WEBHOOK_SECRET"
 ```
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The suite runs in a few seconds with no network and no keys. Supabase, Gemini and the Telegram Bot API are replaced by in-memory fakes at their boundaries (`tests/conftest.py`), and a guard fails any test that tries to connect beyond localhost. Updates still enter through the production path — `api/index.py` → `_build_app()` → handler — so handler registration and callback patterns are covered too. CI runs it on every push.
+
+What is covered:
+
+- **webhook gate** — secret header required, fails closed when `WEBHOOK_SECRET` is unset, GET reveals nothing, one full HTTP → reply run
+- **chat** — browse shortcut, relevance threshold boundary, handoff with owner ping, out-of-stock filtering, LLM failure paths, client language
+- **orders** — lead saved with `returning="minimal"` (RLS regression guard), owner pinged even when the DB write fails, buttons cleared after a tap, every `callback_data` within Telegram's 64-byte limit
+- **RAG** — retrieval call shape, model fallback with backoff on 503, no retries on non-transient errors, prompt grounded in retrieved products only
+- **admin and commands** — owner-only `/stats` and `/missed`, catalog summary, language detection
+
+Known bugs are pinned as strict `xfail` tests, so they turn red the day someone fixes them:
+
+- a Gemini `429` rate limit skips the fallback models (`ClientError` is not caught in `bot/rag/llm.py`)
+- the language picked with the buttons is forgotten on the next message in webhook mode (no persistence between invocations)
+
+Live retrieval against real Gemini and a seeded Supabase is opt-in: `RUN_LIVE=1 python -m pytest -m live`.
 
 ## What's NOT in MVP (intentional)
 
