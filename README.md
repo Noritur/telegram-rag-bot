@@ -231,7 +231,7 @@ Bot quality is bound by content depth. Flat product descriptions force the LLM t
 
 ## Project status & honest notes
 
-- This is a **portfolio implementation** with a mock catalog of 15 stone-jewelry items. For a real shop, replace `bot/data/catalog.json` and re-run `seed_supabase.py`.
+- This is a **portfolio implementation** with a mock catalog of 45 stone-jewelry items (gift, men's, budget and premium ranges, pairing hints in descriptions). For a real shop, replace `bot/data/catalog.json` and re-run `seed_supabase.py`.
 - The mock shop "Murmure" doesn't sell anything — DMs to the bot are stored in `murmure.messages` for analysis only.
 - Security boundary: the only thing protecting `/api/index` from the open internet is the `secret_token` header. Don't commit `WEBHOOK_SECRET` or any of the Supabase / Gemini / Telegram tokens.
 
