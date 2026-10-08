@@ -105,6 +105,7 @@ class FakeQuery:
         self.row: dict | None = None
         self.returning: str | None = None
         self.count: str | None = None
+        self.conflict_key: str | None = None
 
     def select(self, *columns, count=None):
         self.count = count
@@ -129,6 +130,12 @@ class FakeQuery:
         self.returning = returning
         return self
 
+    def upsert(self, row, on_conflict=None, returning=None):
+        self.row = row
+        self.returning = returning
+        self.conflict_key = on_conflict
+        return self
+
     def execute(self):
         if self.table in self.db.fail:
             raise self.db.fail[self.table]
@@ -136,6 +143,10 @@ class FakeQuery:
             self.db.inserts.append(
                 SimpleNamespace(table=self.table, row=self.row, returning=self.returning)
             )
+            if self.conflict_key:  # upsert: replace the row with the same key
+                key = self.conflict_key
+                rows = [r for r in self.db.tables.get(self.table, []) if r.get(key) != self.row.get(key)]
+                self.db.tables[self.table] = rows + [dict(self.row)]
             return SimpleNamespace(data=[], count=None)
         rows = list(self.db.tables.get(self.table, []))
         for op, column, value in self.filters:

@@ -15,6 +15,7 @@ from bot.handlers.commands import (
     catalog_text,
     detect_lang,
 )
+from bot.data.prompts import HANDOFF
 from tests.conftest import ADMIN_ID, CLIENT_ID, PRODUCT
 
 CATALOG = json.loads((Path(__file__).parent.parent / "bot" / "data" / "catalog.json").read_text())
@@ -43,19 +44,53 @@ async def test_language_button_rewrites_the_greeting(bot):
     assert edit["text"] == GREETINGS["en"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "known bug: webhook mode builds a fresh Application per update with no "
-        "persistence, so context.user_data is empty on the next message and the "
-        "chosen language is forgotten - only the greeting text changes"
-    ),
-)
-async def test_chosen_language_sticks_for_the_next_message(bot):
+async def test_chosen_language_sticks_for_the_next_message(bot, db):
+    # Each update builds a fresh Application (as on Vercel), so the choice has
+    # to survive in murmure.user_prefs, not in context.user_data.
     await bot.send(bot.click("lang:en"))
     await bot.send(bot.text("/help"))
 
     assert bot.texts_to(CLIENT_ID)[-1] == HELP["en"]
+    assert db.tables["user_prefs"] == [
+        {"user_id": CLIENT_ID, "lang": "en", "updated_at": db.tables["user_prefs"][0]["updated_at"]}
+    ]
+    [saved] = db.inserted("user_prefs")
+    assert saved.returning == "minimal"
+
+
+async def test_chosen_language_also_drives_free_text_answers(bot, db):
+    db.tables["user_prefs"] = [{"user_id": CLIENT_ID, "lang": "en"}]
+    db.rpc_results["match_products"] = []
+
+    await bot.send(bot.text("а є щось зелене?", lang="uk"))
+
+    assert bot.texts_to(CLIENT_ID) == [HANDOFF["en"]]
+
+
+async def test_switching_again_overwrites_the_choice(bot, db):
+    await bot.send(bot.click("lang:en"))
+    await bot.send(bot.click("lang:ru"))
+    await bot.send(bot.text("/help"))
+
+    assert bot.texts_to(CLIENT_ID)[-1] == HELP["ru"]
+    assert [r["lang"] for r in db.tables["user_prefs"]] == ["ru"]
+
+
+async def test_unreadable_prefs_fall_back_to_telegram_language(bot, db):
+    db.fail["user_prefs"] = RuntimeError("supabase down")
+
+    await bot.send(bot.text("/help", lang="ru"))
+
+    assert bot.texts_to(CLIENT_ID) == [HELP["ru"]]
+
+
+async def test_failed_save_still_switches_the_greeting(bot, db):
+    db.fail["user_prefs"] = RuntimeError("supabase down")
+
+    await bot.send(bot.click("lang:en"))
+
+    [edit] = bot.calls("editMessageText")
+    assert edit["text"] == GREETINGS["en"]
 
 
 def test_catalog_summary_follows_category_order_and_skips_empty(db):

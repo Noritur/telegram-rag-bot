@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from datetime import datetime, timezone
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
@@ -53,15 +55,55 @@ def detect_lang(code: str | None) -> str:
     return "en"
 
 
-def resolve_lang(context: ContextTypes.DEFAULT_TYPE, raw_code: str | None) -> str:
+# The webhook builds a fresh Application per update, so context.user_data is
+# empty on every new message. The language picked with the buttons therefore
+# lives in murmure.user_prefs; user_data only spares a second read within one
+# update. No process-level cache: warm instances would serve a stale choice.
+def _load_lang(user_id: int) -> str | None:
+    rows = (
+        murmure()
+        .table("user_prefs")
+        .select("lang")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    return rows[0]["lang"] if rows else None
+
+
+def _save_lang(user_id: int, lang: str) -> None:
+    murmure().table("user_prefs").upsert(
+        {"user_id": user_id, "lang": lang, "updated_at": datetime.now(timezone.utc).isoformat()},
+        on_conflict="user_id",
+        returning="minimal",
+    ).execute()
+
+
+async def resolve_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Picked language if there is one, else Telegram's language_code.
+    Never raises: a failed read falls back to language_code."""
     saved = context.user_data.get("lang") if context.user_data else None
-    return saved or detect_lang(raw_code)
+    if saved:
+        return saved
+    user = update.effective_user
+    if user:
+        try:
+            stored = await asyncio.to_thread(_load_lang, user.id)
+        except Exception:
+            log.warning("user_prefs read failed — using Telegram language", exc_info=True)
+            stored = None
+        if stored in GREETINGS:
+            if context.user_data is not None:
+                context.user_data["lang"] = stored
+            return stored
+    return detect_lang(user.language_code if user else None)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     raw_code = user.language_code if user else None
-    lang = resolve_lang(context, raw_code)
+    lang = await resolve_lang(update, context)
     log.info(
         "start: user_id=%s tg_lang=%r → resolved=%s",
         user.id if user else None,
@@ -83,6 +125,10 @@ async def switch_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     if context.user_data is not None:
         context.user_data["lang"] = lang
+    try:
+        await asyncio.to_thread(_save_lang, query.from_user.id, lang)
+    except Exception:
+        log.warning("user_prefs write failed — language kept for this message only", exc_info=True)
     log.info("lang switch: user_id=%s → %s", query.from_user.id, lang)
     await query.edit_message_text(GREETINGS[lang], reply_markup=LANG_BUTTONS)
 
@@ -113,8 +159,7 @@ HELP = {
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    lang = resolve_lang(context, user.language_code if user else None)
+    lang = await resolve_lang(update, context)
     await update.message.reply_text(HELP[lang], reply_markup=LANG_BUTTONS)
 
 
@@ -199,7 +244,6 @@ def catalog_text(lang: str) -> str | None:
 
 
 async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    lang = resolve_lang(context, user.language_code if user else None)
+    lang = await resolve_lang(update, context)
     text = catalog_text(lang)
     await update.message.reply_text(text if text else CATALOG_EMPTY[lang])

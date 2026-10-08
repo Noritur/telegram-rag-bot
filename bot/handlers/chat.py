@@ -7,9 +7,10 @@ from telegram.ext import ContextTypes
 from bot.config import RELEVANCE_THRESHOLD
 from bot.data.prompts import HANDOFF, LLM_ERROR
 from bot.handlers.browse import is_browse_query
-from bot.handlers.commands import catalog, resolve_lang
+from bot.handlers.commands import catalog, catalog_text, resolve_lang
 from bot.handlers.notify import format_client, notify_owner
-from bot.handlers.order import reply_cta_markup
+from bot.handlers.order import ORDER_WHAT, reply_cta_markup
+from bot.handlers.order_intent import is_order_intent
 from bot.rag.llm import generate_reply
 from bot.rag.retriever import search
 from bot.storage.logger import safe_log_message, safe_log_missed
@@ -23,7 +24,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text
     user = update.effective_user
     user_id = user.id if user else 0
-    lang = resolve_lang(context, user.language_code if user else None)
+    lang = await resolve_lang(update, context)
 
     # Generic "what do you have?" belongs to the catalog, not per-product RAG.
     if is_browse_query(text):
@@ -32,6 +33,28 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             asyncio.to_thread(safe_log_message, user_id, text, True, None)
         )
         await catalog(update, context)
+        return
+
+    # Bare "хочу замовити": ask what to order instead of a "we don't have it"
+    # handoff, and tell the owner a buyer is warming up.
+    if is_order_intent(text):
+        log.info("order intent without a product: query=%r", text)
+        asyncio.create_task(
+            asyncio.to_thread(safe_log_message, user_id, text, True, None)
+        )
+        try:
+            summary = await asyncio.to_thread(catalog_text, lang)
+        except Exception:
+            log.exception("catalog fetch failed")
+            summary = None
+        await update.message.reply_text(
+            ORDER_WHAT[lang] + (f"\n\n{summary}" if summary else "")
+        )
+        await notify_owner(
+            context.bot,
+            "Клієнт хоче замовити, але ще не обрав виріб.\n"
+            f"Від: {format_client(user)} — можна написати напряму.",
+        )
         return
 
     try:

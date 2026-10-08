@@ -42,6 +42,13 @@ ORDER_ERROR = {
     "en": "Couldn't place the order — please try again in a minute.",
 }
 
+# Reply to a bare "хочу замовити" with no product named (see order_intent.py).
+ORDER_WHAT = {
+    "uk": "Із задоволенням! Що саме хочете замовити? Напишіть назву або камінь — і під відповіддю з'явиться кнопка замовлення.",
+    "ru": "С удовольствием! Что именно хотите заказать? Напишите название или камень — и под ответом появится кнопка заказа.",
+    "en": "Happy to help! What would you like to order? Tell me the piece or the stone — an order button will appear under my answer.",
+}
+
 CATALOG_EMPTY_NAV = {
     "uk": "Каталог тимчасово порожній.",
     "ru": "Каталог временно пуст.",
@@ -103,7 +110,7 @@ async def order_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
     await query.answer()
     user = query.from_user
-    lang = resolve_lang(context, user.language_code if user else None)
+    lang = await resolve_lang(update, context)
     product_id = query.data.split(":", 1)[1]
 
     try:
@@ -150,7 +157,7 @@ async def nav_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     await query.answer()
     user = query.from_user
-    lang = resolve_lang(context, user.language_code if user else None)
+    lang = await resolve_lang(update, context)
     try:
         text = await asyncio.to_thread(catalog_text, lang)
     except Exception:
