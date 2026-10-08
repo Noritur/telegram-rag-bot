@@ -5,6 +5,7 @@ from google.genai import errors
 
 from bot.data.prompts import HANDOFF, LLM_ERROR
 from bot.handlers.commands import CATALOG_INTRO
+from bot.handlers.order import ORDER_WHAT
 from tests.conftest import ADMIN_ID, CLIENT_ID, DEFAULT_REPLY, PRODUCT
 
 
@@ -22,6 +23,32 @@ async def test_browse_question_goes_to_catalog_without_rag(bot, db, genai):
     assert "• Кольє: 1" in reply and "• Браслети: 1" in reply
     assert genai.embed_calls == []
     assert db.rpc_calls == []
+
+
+async def test_bare_order_intent_asks_what_to_order_and_warms_the_owner(bot, db, genai):
+    # Live case, 2026-10-08: typed "Хочу замовити" went to RAG, scored 0.32 and
+    # got "we don't have this" plus an "unanswered question" ping to the owner.
+    db.tables["products"] = [PRODUCT]
+
+    await bot.send(bot.text("Хочу замовити"))
+
+    [reply] = bot.texts_to(CLIENT_ID)
+    assert reply.startswith(ORDER_WHAT["uk"])
+    assert "• Браслети: 1" in reply
+    [ping] = bot.texts_to(ADMIN_ID)
+    assert "ще не обрав" in ping and "@olena_buyer" in ping
+    assert genai.embed_calls == [] and genai.generate_calls == []
+    assert db.inserted("missed") == []
+    assert db.inserted("messages")[0].row["matched"] is True
+
+
+async def test_order_intent_naming_a_product_goes_through_rag(bot, db, genai):
+    db.rpc_results["match_products"] = matches(0.7)
+
+    await bot.send(bot.text("хочу замовити браслет з аметисту"))
+
+    assert genai.embed_calls == ["хочу замовити браслет з аметисту"]
+    assert bot.buttons_to(CLIENT_ID) == ["order:amethyst-bracelet", "nav:catalog"]
 
 
 async def test_relevant_question_gets_grounded_answer_with_order_button(bot, db, genai):

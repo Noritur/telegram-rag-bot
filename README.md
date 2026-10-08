@@ -129,15 +129,13 @@ The suite runs in a few seconds with no network and no keys. Supabase, Gemini an
 What is covered:
 
 - **webhook gate** — secret header required, fails closed when `WEBHOOK_SECRET` is unset, GET reveals nothing, one full HTTP → reply run
-- **chat** — browse shortcut, relevance threshold boundary, handoff with owner ping, out-of-stock filtering, LLM failure paths, client language
+- **chat** — browse shortcut, bare "I want to order" asks what to order (and warms the owner) instead of a handoff, relevance threshold boundary, handoff with owner ping, out-of-stock filtering, LLM failure paths, client language
 - **orders** — lead saved with `returning="minimal"` (RLS regression guard), owner pinged even when the DB write fails, buttons cleared after a tap, every `callback_data` within Telegram's 64-byte limit
 - **RAG** — retrieval call shape, model fallback (503: retry the same model with backoff; 429: switch to the next model at once, since each model has its own quota), no retries on non-transient errors, prompt grounded in retrieved products only, structured reply whose `product_id` enum holds only the retrieved ids, and a parser that never guesses a product
 - **order button** — orders the product the answer recommends (not the top retrieval hit), is labelled with its name, and disappears when the answer recommends nothing
-- **admin and commands** — owner-only `/stats` and `/missed`, catalog summary, language detection
+- **admin and commands** — owner-only `/stats` and `/missed`, catalog summary, language detection, and a picked language that survives across webhook invocations (`murmure.user_prefs`; a failed read or write falls back to Telegram's language)
 
-Known bugs are pinned as strict `xfail` tests, so they turn red the day someone fixes them:
-
-- the language picked with the buttons is forgotten on the next message in webhook mode (no persistence between invocations)
+Bugs found along the way are first pinned as strict `xfail` tests, which turn red the day the bug is fixed, so the marker cannot outlive it. None are open right now.
 
 Live retrieval against real Gemini and a seeded Supabase is opt-in: `RUN_LIVE=1 python -m pytest -m live`.
 
