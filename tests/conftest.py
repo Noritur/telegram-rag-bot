@@ -256,6 +256,8 @@ class FakeTelegramRequest(BaseRequest):
     def __init__(self):
         self.calls: list[tuple[str, dict]] = []
         self._next_id = 1000
+        # endpoint -> Bot API error description: that call answers 400 instead
+        self.errors: dict[str, str] = {}
 
     async def initialize(self) -> None:
         pass
@@ -274,6 +276,9 @@ class FakeTelegramRequest(BaseRequest):
         endpoint = url.rsplit("/", 1)[-1]
         params = dict(request_data.parameters) if request_data else {}
         self.calls.append((endpoint, params))
+        if endpoint in self.errors:
+            body = {"ok": False, "error_code": 400, "description": self.errors[endpoint]}
+            return 400, json.dumps(body).encode()
         return 200, json.dumps({"ok": True, "result": self._result(endpoint, params)}).encode()
 
     def _result(self, endpoint: str, params: dict):

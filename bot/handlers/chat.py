@@ -7,7 +7,8 @@ from telegram.ext import ContextTypes
 from bot.config import RELEVANCE_THRESHOLD
 from bot.data.prompts import GIFT_OVER_BUDGET_NOTE, HANDOFF, LLM_ERROR
 from bot.handlers.browse import is_browse_query
-from bot.handlers.commands import catalog, catalog_text, resolve_lang
+from bot.handlers.category_intent import parse_category
+from bot.handlers.commands import catalog, catalog_text, category_list_text, resolve_lang
 from bot.handlers.gift_intent import parse_gift
 from bot.handlers.notify import format_client, notify_owner
 from bot.handlers.order import ORDER_WHAT, reply_cta_markup
@@ -56,6 +57,25 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "Клієнт хоче замовити, але ще не обрав виріб.\n"
             f"Від: {format_client(user)} — можна написати напряму.",
         )
+        return
+
+    # "Перелічи всі кольє": retrieval returns the top 3 of 9, so a whole
+    # category is listed from the database instead.
+    category = parse_category(text)
+    if category:
+        try:
+            listing = await asyncio.to_thread(
+                category_list_text, category.category, lang, category.budget
+            )
+        except Exception:
+            log.exception("category listing failed")
+            await update.message.reply_text(LLM_ERROR[lang])
+            return
+        log.info("category: %s budget=%s query=%r", category.category, category.budget, text)
+        asyncio.create_task(
+            asyncio.to_thread(safe_log_message, user_id, text, True, None)
+        )
+        await update.message.reply_text(listing, reply_markup=reply_cta_markup(lang, None))
         return
 
     # "Що подарувати мамі до 1000 грн" embeds below the threshold and a vector

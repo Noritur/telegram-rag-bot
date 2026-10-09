@@ -1,8 +1,10 @@
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from bot import config
@@ -136,7 +138,13 @@ async def switch_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception:
         log.warning("user_prefs write failed — language kept for this message only", exc_info=True)
     log.info("lang switch: user_id=%s → %s", query.from_user.id, lang)
-    await query.edit_message_text(greeting(lang), reply_markup=LANG_BUTTONS)
+    try:
+        await query.edit_message_text(greeting(lang), reply_markup=LANG_BUTTONS)
+    except BadRequest as e:
+        # Tapping the language already shown: Telegram refuses an edit that
+        # changes nothing. The choice is saved; there is nothing to redraw.
+        if "not modified" not in str(e).lower():
+            raise
 
 
 HELP = {
@@ -213,6 +221,76 @@ CATALOG_EMPTY = {
 
 
 CATEGORY_ORDER = ["кольє", "браслети", "сережки", "перстні", "кулони"]
+
+
+_QUOTED_TITLE = re.compile(r"['\"«]([^'\"»]+)['\"»]")
+
+
+def short_title(name: str) -> str:
+    """'Кольє 'Лавандова Ніч' з аметисту' -> 'Лавандова Ніч'; no quotes -> name."""
+    m = _QUOTED_TITLE.search(name)
+    return m.group(1) if m else name
+
+
+
+CATEGORY_LIST = {
+    "uk": {
+        "head": "{label} — {n} у наявності:",
+        "head_budget": "{label} до {budget} грн — {n}:",
+        "none_in_budget": "{label} до {budget} грн зараз нема. Усі {n} у наявності:",
+        "empty": "{label} зараз нема в наявності.",
+        "footer": "Напишіть назву — розкажу більше й оформлю замовлення.",
+        "currency": "грн",
+    },
+    "ru": {
+        "head": "{label} — {n} в наличии:",
+        "head_budget": "{label} до {budget} грн — {n}:",
+        "none_in_budget": "{label} до {budget} грн сейчас нет. Все {n} в наличии:",
+        "empty": "{label} сейчас нет в наличии.",
+        "footer": "Напишите название — расскажу подробнее и оформлю заказ.",
+        "currency": "грн",
+    },
+    "en": {
+        "head": "{label} — {n} in stock:",
+        "head_budget": "{label} up to {budget} UAH — {n}:",
+        "none_in_budget": "No {label_lower} up to {budget} UAH right now. All {n} in stock:",
+        "empty": "No {label_lower} in stock right now.",
+        "footer": "Send me a name and I'll tell you more and place the order.",
+        "currency": "UAH",
+    },
+}
+
+
+def category_list_text(category: str, lang: str, budget: int | None = None) -> str:
+    """Every in-stock item of one category, cheapest first - straight from the
+    database, so "list all necklaces" shows all of them, not the top 3."""
+    rows = (
+        shop_db()
+        .table("products")
+        .select("id,name,stone,price_uah,category,in_stock")
+        .eq("category", category)
+        .eq("in_stock", True)
+        .execute()
+        .data
+    )
+    rows = sorted(rows, key=lambda r: r.get("price_uah") or 0)
+    texts = CATEGORY_LIST[lang]
+    label = CATEGORY_LABELS[lang].get(category, category)
+    fmt = {"label": label, "label_lower": label.lower(), "budget": budget}
+    if not rows:
+        return texts["empty"].format(**fmt)
+    shown, head = rows, texts["head"]
+    if budget is not None:
+        within = [r for r in rows if (r.get("price_uah") or 0) <= budget]
+        shown, head = (within, texts["head_budget"]) if within else (rows, texts["none_in_budget"])
+    lines = [head.format(n=len(shown), **fmt), ""]
+    for r in shown:
+        detail = ", ".join(
+            part for part in (r.get("stone"), f"{r.get('price_uah')} {texts['currency']}") if part
+        )
+        lines.append(f"• {short_title(r.get('name', ''))} — {detail}")
+    lines += ["", texts["footer"]]
+    return "\n".join(lines)
 
 
 def catalog_text(lang: str) -> str | None:

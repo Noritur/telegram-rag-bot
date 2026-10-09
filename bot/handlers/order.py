@@ -7,12 +7,11 @@ orders from the same message.
 
 import asyncio
 import logging
-import re
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from bot.handlers.commands import catalog_text, resolve_lang
+from bot.handlers.commands import catalog_text, resolve_lang, short_title
 from bot.handlers.notify import format_client, notify_owner
 from bot.rag.store import shop_db
 
@@ -54,15 +53,6 @@ CATALOG_EMPTY_NAV = {
     "ru": "Каталог временно пуст.",
     "en": "The catalog is temporarily empty.",
 }
-
-
-_QUOTED_TITLE = re.compile(r"['\"«]([^'\"»]+)['\"»]")
-
-
-def short_title(name: str) -> str:
-    """'Кольє 'Лавандова Ніч' з аметисту' -> 'Лавандова Ніч'; no quotes -> name."""
-    m = _QUOTED_TITLE.search(name)
-    return m.group(1) if m else name
 
 
 def reply_cta_markup(lang: str, product: dict | None) -> InlineKeyboardMarkup:
