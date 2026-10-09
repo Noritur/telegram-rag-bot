@@ -202,3 +202,102 @@ async def test_russian_speaking_client_gets_russian(bot, db, genai):
     await bot.send(bot.text("есть гравировка?", lang="ru"))
 
     assert bot.texts_to(CLIENT_ID) == [HANDOFF["ru"]]
+
+
+# --- gift route --------------------------------------------------------------
+
+
+def item(product_id: str, price: int, similarity: float) -> dict:
+    return {
+        **PRODUCT,
+        "id": product_id,
+        "name": f"Кулон '{product_id}'",
+        "price_uah": price,
+        "similarity": similarity,
+    }
+
+
+async def test_gift_question_below_threshold_gets_products_within_budget(bot, db, genai):
+    # Live case, 2026-10-08: "подарунок мамі до 1000 грн" scored 0.33-0.35 and was
+    # handed to the owner, while the catalog has items for mothers under 1000 UAH.
+    db.rpc_results["match_products"] = [
+        item("neck-pricey", 1850, 0.36),
+        item("earr-cheap", 650, 0.33),
+        item("pend-for-mom", 900, 0.30),
+    ]
+    db.tables["products"] = [
+        {"id": "neck-pricey", "tags": ["подарунок", "для мами"], "in_stock": True},
+        {"id": "earr-cheap", "tags": ["подарунок"], "in_stock": True},
+        {"id": "pend-for-mom", "tags": ["подарунок", "для мами"], "in_stock": True},
+    ]
+    genai.reply = {"reply": "Мамі пасуватиме кулон за 900 грн.", "product_id": "pend-for-mom"}
+
+    await bot.send(bot.text("Подарунок мамі до 1000 грн"))
+
+    assert bot.texts_to(CLIENT_ID) == ["Мамі пасуватиме кулон за 900 грн."]
+    assert bot.buttons_to(CLIENT_ID) == ["order:pend-for-mom", "nav:catalog"]
+    [(_, params)] = db.rpc_calls
+    assert params["match_count"] > 45  # the whole catalog, not the top 3
+    [call] = genai.generate_calls
+    assert "neck-pricey" not in call["system"]  # over budget, never offered
+    # tagged for mom ranks above a closer embedding match
+    assert call["system"].index("pend-for-mom") < call["system"].index("earr-cheap")
+    assert "NOTE:" not in call["system"]
+    assert bot.texts_to(ADMIN_ID) == []
+    assert db.inserted("missed") == []
+    assert db.inserted("messages")[0].row["matched"] is True
+
+
+async def test_english_gift_question_is_answered_not_handed_off(bot, db, genai):
+    # Live case, 2026-10-08: 0.379 against the 0.4 threshold.
+    db.rpc_results["match_products"] = matches(0.379)
+
+    await bot.send(bot.text("what do you have for a gift?", lang="en"))
+
+    assert bot.texts_to(CLIENT_ID) == [DEFAULT_REPLY]
+    [call] = genai.generate_calls
+    assert "Respond ONLY in English" in call["system"]
+    assert bot.texts_to(ADMIN_ID) == []
+
+
+async def test_gift_budget_below_the_cheapest_item_offers_the_cheapest_honestly(bot, db, genai):
+    db.rpc_results["match_products"] = [
+        item("neck-1850", 1850, 0.4),
+        item("earr-450", 450, 0.3),
+        item("brace-520", 520, 0.2),
+        item("ring-700", 700, 0.1),
+    ]
+    genai.reply = {"reply": "До 300 грн нічого нема, найдоступніші — від 450 грн.", "product_id": "earr-450"}
+
+    await bot.send(bot.text("подарунок до 300 грн"))
+
+    [call] = genai.generate_calls
+    assert "NOTE: Nothing in the catalog fits the budget" in call["system"]
+    for offered in ("earr-450", "brace-520", "ring-700"):
+        assert offered in call["system"]
+    assert "neck-1850" not in call["system"]
+    assert bot.buttons_to(CLIENT_ID) == ["order:earr-450", "nav:catalog"]
+    assert bot.texts_to(ADMIN_ID) == []
+
+
+async def test_gift_question_with_an_empty_catalog_hands_off(bot, db, genai):
+    db.rpc_results["match_products"] = []
+
+    await bot.send(bot.text("що подарувати мамі?"))
+
+    assert bot.texts_to(CLIENT_ID) == [HANDOFF["uk"]]
+    assert genai.generate_calls == []
+    [ping] = bot.texts_to(ADMIN_ID)
+    assert "що подарувати мамі?" in ping
+
+
+async def test_service_question_about_a_gift_stays_on_the_ordinary_path(bot, db, genai):
+    db.rpc_results["match_products"] = matches(0.3)
+
+    await bot.send(bot.text("чи доставите подарунок у Польщу?"))
+
+    assert bot.texts_to(CLIENT_ID) == [HANDOFF["uk"]]
+    [(_, params)] = db.rpc_calls
+    assert params["match_count"] == 3
+    [ping] = bot.texts_to(ADMIN_ID)
+    assert "Польщу" in ping

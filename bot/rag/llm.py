@@ -76,8 +76,8 @@ def _call(model: str, query: str, system: str, schema: types.Schema) -> str:
     return result.text or ""
 
 
-def generate_reply(query: str, products: list[dict], lang: str) -> Reply:
-    system = build_system_prompt(lang, products)
+def generate_reply(query: str, products: list[dict], lang: str, note: str | None = None) -> Reply:
+    system = build_system_prompt(lang, products, note)
     product_ids = [p["id"] for p in products]
     schema = reply_schema(product_ids)
     last_error: Exception | None = None

@@ -5,14 +5,15 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.config import RELEVANCE_THRESHOLD
-from bot.data.prompts import HANDOFF, LLM_ERROR
+from bot.data.prompts import GIFT_OVER_BUDGET_NOTE, HANDOFF, LLM_ERROR
 from bot.handlers.browse import is_browse_query
 from bot.handlers.commands import catalog, catalog_text, resolve_lang
+from bot.handlers.gift_intent import parse_gift
 from bot.handlers.notify import format_client, notify_owner
 from bot.handlers.order import ORDER_WHAT, reply_cta_markup
 from bot.handlers.order_intent import is_order_intent
 from bot.rag.llm import generate_reply
-from bot.rag.retriever import search
+from bot.rag.retriever import search, search_gift
 from bot.storage.logger import safe_log_message, safe_log_missed
 
 log = logging.getLogger(__name__)
@@ -57,15 +58,31 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
+    # "Що подарувати мамі до 1000 грн" embeds below the threshold and a vector
+    # cannot filter by price: gift questions are filtered by budget and ranked
+    # by recipient tags instead, so relevance comes from the filters.
+    gift = parse_gift(text)
+    over_budget = False
     try:
-        products = await asyncio.to_thread(search, text)
+        if gift:
+            products, over_budget = await asyncio.to_thread(search_gift, text, gift)
+        else:
+            products = await asyncio.to_thread(search, text)
     except Exception:
         log.exception("retrieval failed")
         await update.message.reply_text(LLM_ERROR[lang])
         return
 
     top_sim = products[0]["similarity"] if products else None
-    matched = bool(products and top_sim is not None and top_sim >= RELEVANCE_THRESHOLD)
+    if gift:
+        matched = bool(products)
+        log.info(
+            "gift: budget=%s recipients=%s occasions=%s picked=%s over_budget=%s",
+            gift.budget, sorted(gift.recipients), sorted(gift.occasions),
+            [p["id"] for p in products], over_budget,
+        )
+    else:
+        matched = bool(products and top_sim is not None and top_sim >= RELEVANCE_THRESHOLD)
 
     # Fire-and-forget logging — don't block user reply on Supabase latency.
     asyncio.create_task(
@@ -86,7 +103,10 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     try:
-        reply = await asyncio.to_thread(generate_reply, text, products, lang)
+        reply = await asyncio.to_thread(
+            generate_reply, text, products, lang,
+            GIFT_OVER_BUDGET_NOTE if over_budget else None,
+        )
     except Exception:
         log.exception("LLM call failed")
         await update.message.reply_text(LLM_ERROR[lang])
