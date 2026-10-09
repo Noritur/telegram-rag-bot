@@ -167,7 +167,7 @@ class FakeRPC:
 
 
 class FakeDB:
-    """What murmure() returns: .table() and .rpc(), with every write recorded."""
+    """What shop_db() returns: .table() and .rpc(), with every write recorded."""
 
     def __init__(self):
         self.tables: dict[str, list[dict]] = {}

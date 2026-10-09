@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from bot.rag.store import murmure
+from bot.rag.store import shop_db
 
 log = logging.getLogger(__name__)
 
 
 def log_message(user_id: int, text: str, matched: bool, top_score: float | None) -> None:
-    murmure().table("messages").insert(
+    shop_db().table("messages").insert(
         {
             "user_id": user_id,
             "text": text,
@@ -18,7 +18,7 @@ def log_message(user_id: int, text: str, matched: bool, top_score: float | None)
 
 
 def log_missed(user_id: int, text: str) -> None:
-    murmure().table("missed").insert(
+    shop_db().table("missed").insert(
         {
             "user_id": user_id,
             "text": text,
@@ -43,7 +43,7 @@ def safe_log_missed(user_id: int, text: str) -> None:
 def get_stats(days: int = 7) -> dict:
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     msgs = (
-        murmure()
+        shop_db()
         .table("messages")
         .select("matched")
         .gte("ts", since)
@@ -52,7 +52,7 @@ def get_stats(days: int = 7) -> dict:
         or []
     )
     missed = (
-        murmure()
+        shop_db()
         .table("missed")
         .select("id", count="exact")
         .gte("ts", since)
@@ -71,7 +71,7 @@ def get_stats(days: int = 7) -> dict:
 
 def get_recent_missed(limit: int = 20) -> list[dict]:
     res = (
-        murmure()
+        shop_db()
         .table("missed")
         .select("ts, user_id, text")
         .order("ts", desc=True)

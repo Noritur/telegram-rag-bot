@@ -5,33 +5,39 @@ from datetime import datetime, timezone
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from bot.rag.store import murmure
+from bot import config
+from bot.rag.store import shop_db
 
 log = logging.getLogger(__name__)
 
+# {shop} is filled at call time from config.SHOP_NAME: see greeting().
 GREETINGS = {
     "uk": (
-        "Вітаю в Murmure.\n\n"
+        "Вітаю в {shop}.\n\n"
         "Я допоможу обрати прикраси з натурального каміння — "
         "просто напишіть, що шукаєте.\n\n"
         "/catalog — переглянути асортимент\n"
         "/help — як це працює"
     ),
     "ru": (
-        "Здравствуйте, это Murmure.\n\n"
+        "Здравствуйте, это {shop}.\n\n"
         "Помогу подобрать украшения из натурального камня — "
         "просто напишите, что ищете.\n\n"
         "/catalog — посмотреть ассортимент\n"
         "/help — как это работает"
     ),
     "en": (
-        "Welcome to Murmure.\n\n"
+        "Welcome to {shop}.\n\n"
         "I'll help you find natural stone jewelry — "
         "just tell me what you're looking for.\n\n"
         "/catalog — browse the collection\n"
         "/help — how this works"
     ),
 }
+
+
+def greeting(lang: str) -> str:
+    return GREETINGS[lang].format(shop=config.SHOP_NAME)
 
 LANG_BUTTONS = InlineKeyboardMarkup(
     [
@@ -61,7 +67,7 @@ def detect_lang(code: str | None) -> str:
 # update. No process-level cache: warm instances would serve a stale choice.
 def _load_lang(user_id: int) -> str | None:
     rows = (
-        murmure()
+        shop_db()
         .table("user_prefs")
         .select("lang")
         .eq("user_id", user_id)
@@ -73,7 +79,7 @@ def _load_lang(user_id: int) -> str | None:
 
 
 def _save_lang(user_id: int, lang: str) -> None:
-    murmure().table("user_prefs").upsert(
+    shop_db().table("user_prefs").upsert(
         {"user_id": user_id, "lang": lang, "updated_at": datetime.now(timezone.utc).isoformat()},
         on_conflict="user_id",
         returning="minimal",
@@ -110,7 +116,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         raw_code,
         lang,
     )
-    await update.message.reply_text(GREETINGS[lang], reply_markup=LANG_BUTTONS)
+    await update.message.reply_text(greeting(lang), reply_markup=LANG_BUTTONS)
 
 
 async def switch_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -130,7 +136,7 @@ async def switch_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception:
         log.warning("user_prefs write failed — language kept for this message only", exc_info=True)
     log.info("lang switch: user_id=%s → %s", query.from_user.id, lang)
-    await query.edit_message_text(GREETINGS[lang], reply_markup=LANG_BUTTONS)
+    await query.edit_message_text(greeting(lang), reply_markup=LANG_BUTTONS)
 
 
 HELP = {
@@ -213,7 +219,7 @@ def catalog_text(lang: str) -> str | None:
     """Category summary for both the /catalog command and inline nav buttons.
     Returns None when the catalog is empty."""
     rows = (
-        murmure()
+        shop_db()
         .table("products")
         .select("category,in_stock")
         .eq("in_stock", True)

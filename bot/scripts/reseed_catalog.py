@@ -44,13 +44,13 @@ def main() -> None:
 
     # bot.config reads the environment at import time: set the key first.
     os.environ["SUPABASE_SERVICE_KEY"] = key
-    from bot.rag.store import murmure
+    from bot.rag.store import shop_db
     from bot.scripts import seed_supabase
 
     seed_supabase.main()
     print("2/3 каталог залито (ембединги + upsert)")
 
-    res = murmure().table("products").select("id", count="exact").limit(1).execute()
+    res = shop_db().table("products").select("id", count="exact").limit(1).execute()
     print(f"3/3 у murmure.products зараз {res.count} товарів")
 
 

@@ -1,4 +1,4 @@
-# Murmure — multilingual Telegram support bot for natural-stone jewelry shops
+# Multilingual Telegram support bot for natural-stone jewelry shops
 
 [![tests](https://github.com/Noritur/telegram-rag-bot/actions/workflows/tests.yml/badge.svg)](https://github.com/Noritur/telegram-rag-bot/actions/workflows/tests.yml)
 
@@ -45,19 +45,19 @@ Vercel Function (Python 3.12)
    ├──► Embed query (Gemini text-embedding-2, 1536-dim)
    │       │
    │       ▼
-   │     Supabase RPC murmure.match_products
+   │     Supabase RPC <schema>.match_products
    │       │  (pgvector cosine similarity, top-3, in-stock filter)
    │       ▼
    │     Threshold check (similarity ≥ 0.4)
    │       │
    │       ├── below ──► reply with multilingual handoff text
-   │       │           ──► insert row in murmure.missed
+   │       │           ──► insert row in <schema>.missed
    │       │
    │       └── above ──► Gemini 2.5-flash + system prompt with product context
    │                   (retry + fallback chain to flash-lite, 2.0-flash on 503)
    │                   ──► reply in detected language
    │
-   └──► Fire-and-forget insert into murmure.messages
+   └──► Fire-and-forget insert into <schema>.messages
 ```
 
 ### Tech stack
@@ -68,9 +68,11 @@ Vercel Function (Python 3.12)
 | LLM | `gemini-2.5-flash` with fallback chain | Free tier covers 1k msgs/mo, multilingual quality good |
 | Embeddings | `gemini-embedding-2` @ 1536-dim | Cross-lingual (matches `amethyst` to `аметист`), free |
 | Vector DB | Supabase pgvector | Managed Postgres + ivfflat index, plays well with logs |
-| Logs | Supabase Postgres (separate `murmure` schema) | One backend, RLS for isolation |
+| Logs | Supabase Postgres (one schema per shop, `DB_SCHEMA`) | One backend, RLS for isolation |
 | Deploy | Vercel Functions (Python runtime) | Serverless, free Hobby tier, GitHub auto-deploy |
 | Webhook auth | `secret_token` header | Telegram-recommended, replaces Vercel SSO (which Telegram doesn't speak) |
+
+**One codebase, several shops.** The brand (`SHOP_NAME`) and the Postgres schema (`DB_SCHEMA`) come from env, so each shop is its own Vercel project with its own bot token, schema and catalog, all deployed from this repo. `bot/scripts/connect_bot.py` connects a new bot to its project in one run: token and service key via hidden input, env written to Vercel, production redeployed, webhook registered.
 
 ### Cost (production at 1000 messages/month)
 
@@ -95,12 +97,14 @@ pip install -r requirements.txt
 #    GEMINI_API_KEY      ← https://aistudio.google.com/apikey (free)
 #    SUPABASE_URL/KEY/SERVICE_KEY ← https://supabase.com (free project)
 #    ADMIN_USER_ID       ← @userinfobot in Telegram
+#    SHOP_NAME, DB_SCHEMA ← the brand the bot introduces itself with and its Postgres schema
 #    WEBHOOK_SECRET      ← openssl rand -hex 32
 cp .env.example .env  # fill in the values
 
 # 3. Apply Supabase schema (run the SQL in Supabase SQL editor)
-#    See migrations: init_murmure_schema, grant_murmure_to_anon, enable_rls_murmure
-#    Then: Settings → API → Exposed schemas → add `murmure` → Save
+#    Tables: products (with a vector embedding), orders, messages, missed, user_prefs,
+#    plus the match_products function; RLS on, access for service_role only
+#    Then: Settings → Data API → Exposed schemas → add your DB_SCHEMA → Save
 
 # 4. Seed the catalog
 python -m bot.scripts.seed_supabase
@@ -133,7 +137,7 @@ What is covered:
 - **orders** — lead saved with `returning="minimal"` (RLS regression guard), owner pinged even when the DB write fails, buttons cleared after a tap, every `callback_data` within Telegram's 64-byte limit
 - **RAG** — retrieval call shape, model fallback (503: retry the same model with backoff; 429: switch to the next model at once, since each model has its own quota), no retries on non-transient errors, prompt grounded in retrieved products only, structured reply whose `product_id` enum holds only the retrieved ids, and a parser that never guesses a product
 - **order button** — orders the product the answer recommends (not the top retrieval hit), is labelled with its name, and disappears when the answer recommends nothing
-- **admin and commands** — owner-only `/stats` and `/missed`, catalog summary, language detection, and a picked language that survives across webhook invocations (`murmure.user_prefs`; a failed read or write falls back to Telegram's language)
+- **admin and commands** — owner-only `/stats` and `/missed`, catalog summary, language detection, and a picked language that survives across webhook invocations (`user_prefs` table; a failed read or write falls back to Telegram's language)
 
 Bugs found along the way are first pinned as strict `xfail` tests, which turn red the day the bug is fixed, so the marker cannot outlive it. None are open right now.
 
@@ -232,7 +236,7 @@ Bot quality is bound by content depth. Flat product descriptions force the LLM t
 ## Project status & honest notes
 
 - This is a **portfolio implementation** with a mock catalog of 45 stone-jewelry items (gift, men's, budget and premium ranges, pairing hints in descriptions). For a real shop, replace `bot/data/catalog.json` and re-run `seed_supabase.py`.
-- The mock shop "Murmure" doesn't sell anything — DMs to the bot are stored in `murmure.messages` for analysis only.
+- The demo shop (Lumina Stones) doesn't sell anything — DMs to the bot are stored in its schema's `messages` table for analysis only.
 - Security boundary: the only thing protecting `/api/index` from the open internet is the `secret_token` header. Don't commit `WEBHOOK_SECRET` or any of the Supabase / Gemini / Telegram tokens.
 
 ## License

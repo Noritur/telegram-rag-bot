@@ -9,6 +9,7 @@ from telegram.ext import (
     filters,
 )
 
+from bot import config
 from bot.config import ADMIN_USER_ID, TELEGRAM_BOT_TOKEN
 from bot.handlers.admin import missed, stats
 from bot.handlers.chat import chat
@@ -90,7 +91,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(order_callback, pattern=r"^order:"))
     app.add_handler(CallbackQueryHandler(nav_catalog, pattern=r"^nav:catalog$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
-    logging.info("Murmure bot starting in polling mode...")
+    logging.info("%s bot starting in polling mode...", config.SHOP_NAME)
     app.run_polling()
 
 
