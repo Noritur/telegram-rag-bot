@@ -24,7 +24,18 @@ def _format_product(p: dict) -> str:
     return f"- [{p.get('id', '')}] {name} | {head}\n  {desc}"
 
 
-def build_system_prompt(lang: str, products: list[dict]) -> str:
+# Gift route found nothing within the named budget and passes the cheapest
+# items instead. Without this line the model follows "nothing matches ->
+# connect to the owner" and the owner never hears about it.
+GIFT_OVER_BUDGET_NOTE = (
+    "Nothing in the catalog fits the budget the user named. The items below are "
+    "the most affordable ones: say honestly that there is nothing within that "
+    "budget and offer them as the closest options, with their prices. Do not "
+    "promise to connect the user to the owner."
+)
+
+
+def build_system_prompt(lang: str, products: list[dict], note: str | None = None) -> str:
     lang_label = LANG_LABELS.get(lang, "English")
     catalog_block = (
         "\n".join(_format_product(p) for p in products) if products else "(empty)"
@@ -44,6 +55,7 @@ def build_system_prompt(lang: str, products: list[dict]) -> str:
         "your reply orders exactly that item. When you suggest an alternative to what "
         "was asked, name it in the reply and put its [id] in product_id. Use \"none\" "
         "only when the reply recommends no item at all.\n"
-        "\nCATALOG:\n"
+        + (f"\nNOTE: {note}\n" if note else "")
+        + "\nCATALOG:\n"
         f"{catalog_block}"
     )
