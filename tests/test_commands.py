@@ -10,7 +10,7 @@ import bot.handlers.notify as notify
 from bot.handlers.commands import (
     CATEGORY_LABELS,
     CATEGORY_ORDER,
-    GREETINGS,
+    greeting,
     HELP,
     catalog_text,
     detect_lang,
@@ -33,7 +33,7 @@ def test_detect_lang(code, expected):
 async def test_start_greets_in_client_language_with_language_buttons(bot):
     await bot.send(bot.text("/start", lang="ru"))
 
-    assert bot.texts_to(CLIENT_ID) == [GREETINGS["ru"]]
+    assert bot.texts_to(CLIENT_ID) == [greeting("ru")]
     assert bot.buttons_to(CLIENT_ID) == LANG_BUTTONS
 
 
@@ -41,7 +41,7 @@ async def test_language_button_rewrites_the_greeting(bot):
     await bot.send(bot.click("lang:en"))
 
     [edit] = bot.calls("editMessageText")
-    assert edit["text"] == GREETINGS["en"]
+    assert edit["text"] == greeting("en")
 
 
 async def test_chosen_language_sticks_for_the_next_message(bot, db):
@@ -90,7 +90,7 @@ async def test_failed_save_still_switches_the_greeting(bot, db):
     await bot.send(bot.click("lang:en"))
 
     [edit] = bot.calls("editMessageText")
-    assert edit["text"] == GREETINGS["en"]
+    assert edit["text"] == greeting("en")
 
 
 def test_catalog_summary_follows_category_order_and_skips_empty(db):

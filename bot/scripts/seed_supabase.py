@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 from bot.rag.embeddings import embed_batch
-from bot.rag.store import murmure
+from bot.rag.store import shop_db
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def main() -> None:
     log.info("Embedding %d texts in one batch...", len(texts))
     embeddings = embed_batch(texts)
 
-    client = murmure()
+    client = shop_db()
     for item, emb in zip(items, embeddings):
         record = {**item, "embedding": emb}
         client.table("products").upsert(record).execute()

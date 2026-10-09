@@ -1,5 +1,6 @@
 from supabase import Client, create_client
 
+from bot import config
 from bot.config import SUPABASE_KEY, SUPABASE_SERVICE_KEY, SUPABASE_URL
 
 _client: Client | None = None
@@ -27,5 +28,6 @@ def get_client() -> Client:
     return _client
 
 
-def murmure():
-    return get_client().schema("murmure")
+def shop_db():
+    """This shop's schema: products, orders, logs and language prefs."""
+    return get_client().schema(config.DB_SCHEMA)

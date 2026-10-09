@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes
 
 from bot.handlers.commands import catalog_text, resolve_lang
 from bot.handlers.notify import format_client, notify_owner
-from bot.rag.store import murmure
+from bot.rag.store import shop_db
 
 log = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def reply_cta_markup(lang: str, product: dict | None) -> InlineKeyboardMarkup:
 
 def _fetch_product_name(product_id: str) -> str | None:
     rows = (
-        murmure()
+        shop_db()
         .table("products")
         .select("name")
         .eq("id", product_id)
@@ -93,7 +93,7 @@ def _insert_order(user_id: int, username: str | None, product_id: str, product_n
     # returning="minimal": orders are write-only for the bot role — RLS has an
     # INSERT policy but deliberately no SELECT, so return=representation would
     # reject the whole insert.
-    murmure().table("orders").insert(
+    shop_db().table("orders").insert(
         {
             "user_id": user_id,
             "username": username,

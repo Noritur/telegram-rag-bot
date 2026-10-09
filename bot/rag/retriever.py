@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from bot.config import TOP_K
 from bot.rag.embeddings import embed
-from bot.rag.store import murmure
+from bot.rag.store import shop_db
 
 if TYPE_CHECKING:  # rag must not import handlers at runtime
     from bot.handlers.gift_intent import GiftQuery
@@ -16,7 +16,7 @@ GIFT_POOL = 100
 def search(query: str, k: int = TOP_K) -> list[dict]:
     emb = embed(query)
     res = (
-        murmure()
+        shop_db()
         .rpc("match_products", {"query_embedding": emb, "match_count": k})
         .execute()
     )
@@ -33,7 +33,7 @@ def search_gift(query: str, gift: GiftQuery, k: int = TOP_K) -> GiftResult:
     """Budget is a hard price filter; recipient and occasion tags only rank,
     because most items for women carry no "для неї" tag and a filter would
     drop them. Similarity breaks ties, and orders the pool when no tag matches."""
-    db = murmure()
+    db = shop_db()
     rows = (
         db.rpc("match_products", {"query_embedding": embed(query), "match_count": GIFT_POOL})
         .execute()

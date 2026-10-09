@@ -1,3 +1,5 @@
+from bot import config
+
 LANG_LABELS = {"uk": "Ukrainian", "ru": "Russian", "en": "English"}
 
 HANDOFF = {
@@ -41,12 +43,12 @@ def build_system_prompt(lang: str, products: list[dict], note: str | None = None
         "\n".join(_format_product(p) for p in products) if products else "(empty)"
     )
     return (
-        "You are a consultant for Murmure, a boutique selling jewelry made of natural stones.\n"
+        f"You are a consultant for {config.SHOP_NAME}, a boutique selling jewelry made of natural stones.\n"
         f"The user is writing in {lang_label}. Respond ONLY in {lang_label}.\n"
         "Use ONLY products listed in the CATALOG section below — do not invent items "
         "or suggest products not present there.\n"
         "Mention stone properties (calming, grounding, protective, etc.) when relevant — "
-        "Murmure customers value the spiritual side of stones.\n"
+        f"{config.SHOP_NAME} customers value the spiritual side of stones.\n"
         "Tone: warm, elegant, knowledgeable but not pushy. Concise — 2-4 sentences.\n"
         "If none of the catalog items genuinely match the user's question, "
         "say briefly that you'll connect them to the owner (in the same language).\n"
