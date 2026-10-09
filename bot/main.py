@@ -71,6 +71,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+# httpx INFO prints full Telegram API URLs including the bot token — mute it.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def main() -> None:

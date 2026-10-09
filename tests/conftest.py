@@ -284,6 +284,17 @@ class FakeTelegramRequest(BaseRequest):
     def _result(self, endpoint: str, params: dict):
         if endpoint == "getMe":
             return BOT_USER
+        if endpoint == "getMyCommands":
+            # the menu last set for the same scope and language, as Telegram keeps it
+            # (no scope means the default scope, as in the Bot API)
+            def key(p):
+                scope = p.get("scope") or {"type": "default"}
+                return (json.dumps(scope, sort_keys=True), p.get("language_code"))
+
+            for e, p in reversed(self.calls[:-1]):
+                if e == "setMyCommands" and key(p) == key(params):
+                    return p["commands"]
+            return []
         if endpoint in ("sendMessage", "editMessageText", "editMessageReplyMarkup"):
             self._next_id += 1
             return {

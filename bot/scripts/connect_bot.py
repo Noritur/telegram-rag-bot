@@ -15,7 +15,8 @@ then:
      so nothing shows up in `ps`); SHOP_NAME, DB_SCHEMA, SUPABASE_URL and
      ADMIN_USER_ID as plain ones,
   4. redeploys production so the function sees the new env,
-  5. registers the webhook with the secret and reads getWebhookInfo back.
+  5. registers the webhook with the secret and reads getWebhookInfo back,
+  6. registers the command menu (bot.main sets it only in polling mode).
 Prints statuses only, never a value.
 
 Usage:
@@ -24,6 +25,7 @@ Usage:
 """
 
 import argparse
+import asyncio
 import json
 import os
 import re
@@ -74,7 +76,7 @@ def main() -> None:
         me = tg_api(token, "getMe")["result"]
     except Exception:
         sys.exit("getMe не пройшов: токен невірний або telegram недоступний. Нічого не записано.")
-    print(f"1/5 токен живий: @{me['username']}")
+    print(f"1/6 токен живий: @{me['username']}")
 
     url = read_env_value("SUPABASE_URL")
     m = re.match(r"^https://([a-z0-9]+)\.supabase\.co/?$", url)
@@ -88,7 +90,7 @@ def main() -> None:
     if claims.get("role") != "service_role" or claims.get("ref") != m.group(1):
         sys.exit("Це не service_role ключ цього проєкту supabase. Нічого не записано.")
     count = count_products(url, key, args.schema)
-    print(f"2/5 ключ бачить {args.schema}.products: {count} товарів")
+    print(f"2/6 ключ бачить {args.schema}.products: {count} товарів")
 
     gemini = read_env_value("GEMINI_API_KEY")
     admin = read_env_value("ADMIN_USER_ID")
@@ -113,12 +115,12 @@ def main() -> None:
     missing = [n for n in values if not re.search(rf"^\s*{n}\s", names, re.M)]
     if missing:
         sys.exit(f"У vercel env не з'явились: {', '.join(missing)}")
-    print(f"3/5 env записано у проєкт ({len(values)} змінних, секрети як sensitive)")
+    print(f"3/6 env записано у проєкт ({len(values)} змінних, секрети як sensitive)")
 
     r = vercel(["redeploy", base_url, "--target", "production"], env)
     if r.returncode != 0:
         sys.exit(f"redeploy упав (код {r.returncode}). env уже записано: передеплой вручну і запусти ще раз.")
-    print("4/5 прод передеплоєно з новим env")
+    print("4/6 прод передеплоєно з новим env")
 
     hook = f"{base_url}/api/index"
     res = tg_api(token, "setWebhook", {
@@ -130,9 +132,21 @@ def main() -> None:
     if not res.get("ok"):
         sys.exit(f"setWebhook відмовив: {res.get('description')}")
     info = tg_api(token, "getWebhookInfo")["result"]
-    print(f"5/5 вебхук: {info.get('url')} · pending {info.get('pending_update_count')} · "
+    print(f"5/6 вебхук: {info.get('url')} · pending {info.get('pending_update_count')} · "
           f"помилка: {info.get('last_error_message') or 'нема'}")
+    _, public, owner = asyncio.run(_register_menu(token))
+    print(f"6/6 меню: {len(public)} команд для клієнтів, {len(owner)} для тебе")
     print(f"\nDONE: напиши боту @{me['username']} /start")
+
+
+async def _register_menu(token: str) -> tuple[str, list[str], list[str]]:
+    # The menu lives on Telegram's side and bot.main sets it only in polling mode.
+    from telegram import Bot
+
+    from bot.scripts.set_commands import register_menu
+
+    async with Bot(token) as bot:
+        return await register_menu(bot)
 
 
 def input_secret(prompt: str) -> str:
