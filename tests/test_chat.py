@@ -301,3 +301,81 @@ async def test_service_question_about_a_gift_stays_on_the_ordinary_path(bot, db,
     assert params["match_count"] == 3
     [ping] = bot.texts_to(ADMIN_ID)
     assert "Польщу" in ping
+
+
+# --- category listing ---------------------------------------------------------
+
+
+def jewel(product_id: str, category: str, title: str, stone: str, price: int, in_stock: bool = True) -> dict:
+    return {
+        "id": product_id, "category": category, "name": f"Виріб '{title}'",
+        "stone": stone, "price_uah": price, "in_stock": in_stock,
+    }
+
+
+CATALOG_ROWS = [
+    jewel("neck-1", "кольє", "Лавандова Ніч", "аметист", 1850),
+    jewel("neck-2", "кольє", "Морський Бриз", "аквамарин", 980),
+    jewel("neck-3", "кольє", "Сонячний Ранок", "цитрин", 650),
+    jewel("neck-4", "кольє", "Розпродано", "опал", 700, in_stock=False),
+    jewel("brace-1", "браслети", "Тигрове Око", "тигрове око", 900),
+]
+
+
+async def test_listing_a_category_shows_every_item_not_the_top_three(bot, db, genai):
+    # Live, 2026-10-09: "Які кольє є перечисли" showed 3 of 9, and "а напиши всі 9"
+    # went to the owner as an unanswered question.
+    db.tables["products"] = CATALOG_ROWS
+
+    await bot.send(bot.text("Які кольє є перечисли"))
+
+    [reply] = bot.texts_to(CLIENT_ID)
+    assert reply.startswith("Кольє — 3 у наявності:")
+    lines = [line for line in reply.splitlines() if line.startswith("• ")]
+    assert lines == [
+        "• Сонячний Ранок — цитрин, 650 грн",
+        "• Морський Бриз — аквамарин, 980 грн",
+        "• Лавандова Ніч — аметист, 1850 грн",
+    ]  # cheapest first, out of stock and other categories left out
+    assert bot.buttons_to(CLIENT_ID) == ["nav:catalog"]
+    assert genai.embed_calls == [] and genai.generate_calls == []
+    assert bot.texts_to(ADMIN_ID) == []
+    assert db.inserted("messages")[0].row["matched"] is True
+    assert db.inserted("missed") == []
+
+
+async def test_category_with_a_budget_lists_only_what_fits(bot, db):
+    db.tables["products"] = CATALOG_ROWS
+
+    await bot.send(bot.text("покажи всі кольє до 1000 грн"))
+
+    [reply] = bot.texts_to(CLIENT_ID)
+    assert reply.startswith("Кольє до 1000 грн — 2:")
+    assert "Лавандова Ніч" not in reply
+
+
+async def test_category_with_a_budget_below_everything_says_so_and_lists_all(bot, db):
+    db.tables["products"] = CATALOG_ROWS
+
+    await bot.send(bot.text("покажи всі кольє до 300 грн"))
+
+    [reply] = bot.texts_to(CLIENT_ID)
+    assert reply.startswith("Кольє до 300 грн зараз нема. Усі 3 у наявності:")
+
+
+async def test_empty_category_says_it_is_out_of_stock(bot, db):
+    db.tables["products"] = CATALOG_ROWS
+
+    await bot.send(bot.text("покажи всі кулони"))
+
+    assert bot.texts_to(CLIENT_ID) == ["Кулони зараз нема в наявності."]
+
+
+async def test_category_listing_speaks_the_client_language(bot, db):
+    db.tables["products"] = CATALOG_ROWS
+
+    await bot.send(bot.text("show me all necklaces", lang="en"))
+
+    [reply] = bot.texts_to(CLIENT_ID)
+    assert reply.startswith("Necklaces — 3 in stock:")
+    assert "650 UAH" in reply

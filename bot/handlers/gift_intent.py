@@ -14,7 +14,7 @@ but a person has to answer those - they stay on the ordinary path.
 import re
 from dataclasses import dataclass
 
-_GIFT = re.compile(r"подар\w*|\bgift\w*|\bpresent\b")
+GIFT_WORD = re.compile(r"подар\w*|\bgift\w*|\bpresent\b")
 
 # Catalog tags (bot/data/catalog.json) per recipient. Stems, so the Ukrainian
 # and Russian case endings match: мамі, маме, мамочці.
@@ -105,6 +105,6 @@ def parse_gift(text: str) -> GiftQuery | None:
     budget = parse_budget(text)
     recipients = _tags(text, _RECIPIENTS)
     occasions = _tags(text, _OCCASIONS)
-    if not (_GIFT.search(text) or budget or recipients or occasions):
+    if not (GIFT_WORD.search(text) or budget or recipients or occasions):
         return None
     return GiftQuery(budget, recipients, occasions)

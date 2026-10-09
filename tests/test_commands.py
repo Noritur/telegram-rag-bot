@@ -44,6 +44,27 @@ async def test_language_button_rewrites_the_greeting(bot):
     assert edit["text"] == greeting("en")
 
 
+@pytest.mark.parametrize(
+    ("error", "logged"),
+    [
+        ("Bad Request: message is not modified: specified new message content and reply "
+         "markup are exactly the same as a current content and reply markup of the message", False),
+        ("Bad Request: message to edit not found", True),
+    ],
+    ids=["same-language-tap-is-quiet", "other-edit-error-still-surfaces"],
+)
+async def test_tapping_the_language_already_shown(bot, db, caplog, error, logged):
+    # Live, 2026-10-09: a second tap on the current language logged a traceback
+    # ("Message is not modified") on every tap.
+    bot.request.errors["editMessageText"] = error
+
+    await bot.send(bot.click("lang:uk"))
+
+    assert db.inserted("user_prefs")[0].row["lang"] == "uk"  # the choice is saved either way
+    tracebacks = [r for r in caplog.records if r.exc_info]
+    assert bool(tracebacks) is logged
+
+
 async def test_chosen_language_sticks_for_the_next_message(bot, db):
     # Each update builds a fresh Application (as on Vercel), so the choice has
     # to survive in murmure.user_prefs, not in context.user_data.
