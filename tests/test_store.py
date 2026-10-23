@@ -2,7 +2,7 @@
 
 The bot must run on the service_role key in production: the anon key is
 public (a browser app shares the project), so anon policies cannot guard the
-murmure log tables. Logging silently failed from May to October 2026 while
+shop's log tables. Logging silently failed from May to October 2026 while
 the service key was missing.
 """
 

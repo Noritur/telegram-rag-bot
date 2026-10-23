@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -14,9 +15,15 @@ ADMIN_USER_ID = int(os.environ.get("ADMIN_USER_ID") or "0")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 
 # One codebase, several shops: each deployment names its brand and its own
-# Postgres schema (same tables) through env. Defaults keep the original bot.
-SHOP_NAME = os.environ.get("SHOP_NAME") or "Murmure"
-DB_SCHEMA = os.environ.get("DB_SCHEMA") or "murmure"
+# Postgres schema (same tables) through env. Both are required, so a
+# deployment can never fall back to another shop's name or data.
+SHOP_NAME = os.environ.get("SHOP_NAME", "").strip()
+DB_SCHEMA = os.environ.get("DB_SCHEMA", "").strip()
+_missing = [name for name, value in (("SHOP_NAME", SHOP_NAME), ("DB_SCHEMA", DB_SCHEMA)) if not value]
+if _missing:
+    raise RuntimeError(f"Set {', '.join(_missing)} in the environment (see .env.example).")
+if not re.fullmatch(r"[a-z_][a-z0-9_]*", DB_SCHEMA):
+    raise RuntimeError("DB_SCHEMA must be a plain Postgres schema name: lowercase letters, digits, _.")
 
 GEMINI_EMBEDDING_MODEL = "gemini-embedding-2"
 GEMINI_EMBEDDING_DIM = 1536

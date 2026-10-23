@@ -51,7 +51,7 @@ def test_search_asks_for_top_k_by_embedding_and_drops_out_of_stock(db, genai):
     assert name == "match_products"
     assert params == {"query_embedding": [0.1, 0.2, 0.3], "match_count": 3}
     assert genai.embed_calls == ["аметист"]
-    assert db.schemas == ["murmure"]
+    assert db.schemas == ["demo_shop"]
 
 
 # --- model fallback ----------------------------------------------------------

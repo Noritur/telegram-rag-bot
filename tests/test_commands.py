@@ -67,7 +67,7 @@ async def test_tapping_the_language_already_shown(bot, db, caplog, error, logged
 
 async def test_chosen_language_sticks_for_the_next_message(bot, db):
     # Each update builds a fresh Application (as on Vercel), so the choice has
-    # to survive in murmure.user_prefs, not in context.user_data.
+    # to survive in the shop schema's user_prefs, not in context.user_data.
     await bot.send(bot.click("lang:en"))
     await bot.send(bot.text("/help"))
 

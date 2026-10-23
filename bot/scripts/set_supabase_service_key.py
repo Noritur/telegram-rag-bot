@@ -1,14 +1,14 @@
 """Put the Supabase service_role key into Vercel production env, end to end.
 
 The bot used to run on the anon key, which is public (the same Supabase
-project serves a browser app). With RLS on murmure.messages / murmure.missed
+project serves a browser app). With RLS on the shop's messages / missed tables
 and no anon policies, every log write failed with 42501 and /stats read
 nothing. bot.rag.store already prefers SUPABASE_SERVICE_KEY; it was just
 never set in Vercel.
 
 Prompts for the key (hidden input), then:
   1. checks it is a service_role key for this project (JWT claims, no network),
-  2. reads murmure.messages through supabase-py with it - a non-zero count
+  2. reads <DB_SCHEMA>.messages through supabase-py with it - a non-zero count
      proves RLS is bypassed, i.e. the key does what the bot needs,
   3. stores it in Vercel production as a sensitive variable, value via stdin
      (never in argv, so it does not show up in `ps`).
@@ -51,6 +51,9 @@ def main() -> None:
     if not m:
         sys.exit("SUPABASE_URL у .env не схожий на https://<ref>.supabase.co")
     ref = m.group(1)
+    schema = read_env_value("DB_SCHEMA")
+    if not re.fullmatch(r"[a-z_][a-z0-9_]*", schema):
+        sys.exit("DB_SCHEMA у .env не задано або це не ім'я схеми (наприклад, lumina)")
 
     key = getpass.getpass(
         "Supabase service_role key (Settings -> API Keys -> service_role, ввід прихований): "
@@ -74,7 +77,7 @@ def main() -> None:
         try:
             res = (
                 create_client(url, key)
-                .schema("murmure")
+                .schema(schema)
                 .table("messages")
                 .select("id", count="exact")
                 .limit(1)
@@ -90,8 +93,8 @@ def main() -> None:
     if res is None:
         sys.exit("Supabase недоступний після 3 спроб. У vercel нічого не записано — запусти ще раз.")
     if not res.count:
-        sys.exit("Ключ не бачить жодного рядка в murmure.messages — RLS він не обходить.")
-    print(f"2/3 доступ перевірено: ключ бачить murmure.messages ({res.count} рядків)")
+        sys.exit(f"Ключ не бачить жодного рядка в {schema}.messages — RLS він не обходить.")
+    print(f"2/3 доступ перевірено: ключ бачить {schema}.messages ({res.count} рядків)")
 
     r = subprocess.run(
         ["vercel", "env", "add", VAR, "production", "--sensitive", "--force", "--yes"],
