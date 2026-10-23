@@ -1,6 +1,6 @@
-"""Reseed murmure.products from bot/data/catalog.json, end to end.
+"""Reseed <DB_SCHEMA>.products from bot/data/catalog.json, end to end.
 
-The murmure schema is closed to the anon key (it is public), so writing the
+The shop schema is closed to the anon key (it is public), so writing the
 catalog needs the service_role key - the same one the bot runs on in Vercel.
 It is asked for with getpass and lives only in this process: nothing is
 written to .env.
@@ -44,6 +44,7 @@ def main() -> None:
 
     # bot.config reads the environment at import time: set the key first.
     os.environ["SUPABASE_SERVICE_KEY"] = key
+    from bot import config
     from bot.rag.store import shop_db
     from bot.scripts import seed_supabase
 
@@ -51,7 +52,7 @@ def main() -> None:
     print("2/3 каталог залито (ембединги + upsert)")
 
     res = shop_db().table("products").select("id", count="exact").limit(1).execute()
-    print(f"3/3 у murmure.products зараз {res.count} товарів")
+    print(f"3/3 у {config.DB_SCHEMA}.products зараз {res.count} товарів")
 
 
 if __name__ == "__main__":

@@ -65,7 +65,7 @@ def detect_lang(code: str | None) -> str:
 
 # The webhook builds a fresh Application per update, so context.user_data is
 # empty on every new message. The language picked with the buttons therefore
-# lives in murmure.user_prefs; user_data only spares a second read within one
+# lives in the shop schema's user_prefs table; user_data only spares a second read within one
 # update. No process-level cache: warm instances would serve a stale choice.
 def _load_lang(user_id: int) -> str | None:
     rows = (

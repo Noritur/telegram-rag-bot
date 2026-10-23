@@ -19,7 +19,7 @@ async def test_menu_is_registered_per_language_and_for_the_owner():
     async with Bot("123456:TEST-TOKEN", request=request) as bot:
         username, public, owner = await set_commands.register_menu(bot)
 
-    assert username == "murmure_test_bot"
+    assert username == "demo_shop_test_bot"
     assert public == ["start", "catalog", "help"]
     assert owner == ["start", "catalog", "help", "stats", "missed"]
     sets = [p for e, p in request.calls if e == "setMyCommands"]

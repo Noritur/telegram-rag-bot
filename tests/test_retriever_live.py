@@ -1,8 +1,8 @@
 """Live retrieval check against the real Gemini embeddings and seeded Supabase.
 
 Skipped by default. Run: RUN_LIVE=1 .venv/bin/python -m pytest -m live
-Requires real GEMINI_API_KEY / SUPABASE_URL / SUPABASE_KEY in .env and a seeded
-murmure.products table.
+Requires real GEMINI_API_KEY / SUPABASE_URL / SUPABASE_KEY / SHOP_NAME / DB_SCHEMA
+in .env and a seeded products table in that schema.
 """
 
 import pytest

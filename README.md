@@ -97,7 +97,7 @@ pip install -r requirements.txt
 #    GEMINI_API_KEY      ← https://aistudio.google.com/apikey (free)
 #    SUPABASE_URL/KEY/SERVICE_KEY ← https://supabase.com (free project)
 #    ADMIN_USER_ID       ← @userinfobot in Telegram
-#    SHOP_NAME, DB_SCHEMA ← the brand the bot introduces itself with and its Postgres schema
+#    SHOP_NAME, DB_SCHEMA ← required: the brand the bot introduces itself with and its Postgres schema
 #    WEBHOOK_SECRET      ← openssl rand -hex 32
 cp .env.example .env  # fill in the values
 

@@ -31,6 +31,8 @@ if not LIVE:
             "SUPABASE_URL": "http://supabase.invalid",
             "SUPABASE_KEY": "test-anon-key",
             "SUPABASE_SERVICE_KEY": "",
+            "SHOP_NAME": "Demo Shop",
+            "DB_SCHEMA": "demo_shop",
         }
     )
 os.environ.update(_FAKE_ENV)
@@ -48,8 +50,8 @@ CLIENT_ID = 111
 BOT_USER = {
     "id": 1,
     "is_bot": True,
-    "first_name": "Murmure",
-    "username": "murmure_test_bot",
+    "first_name": "Demo Shop",
+    "username": "demo_shop_test_bot",
     "can_join_groups": False,
     "can_read_all_group_messages": False,
     "supports_inline_queries": False,

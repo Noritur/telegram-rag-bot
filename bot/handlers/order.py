@@ -1,6 +1,6 @@
 """Order capture — the button under every product answer.
 
-Click -> order row in murmure.orders + instant owner ping + confirmation to
+Click -> order row in the shop schema's orders + instant owner ping + confirmation to
 the client. The reply keyboard is cleared after a click to prevent duplicate
 orders from the same message.
 """
